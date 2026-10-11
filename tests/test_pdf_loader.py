@@ -63,3 +63,29 @@ def test_pdf_without_text_raises(tmp_path: Path) -> None:
     doc.close()
     with pytest.raises(ValueError, match="no extractable text"):
         load_pdf(path)
+
+
+def test_pdf_with_drawings_only_raises(tmp_path: Path) -> None:
+    path = tmp_path / "drawings.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.draw_rect(pymupdf.Rect(50, 50, 200, 200), color=(0, 0, 0), fill=(0.5, 0.5, 0.5))
+    doc.save(path)
+    doc.close()
+    with pytest.raises(ValueError, match="no extractable text"):
+        load_pdf(path)
+
+
+def test_partially_blank_pages_succeed(tmp_path: Path) -> None:
+    path = tmp_path / "mixed.pdf"
+    doc = pymupdf.open()
+    doc.new_page()  # Page 1: blank divider
+    p2 = doc.new_page()  # Page 2: text
+    p2.insert_text((72, 100), "Clause 1", fontsize=12)
+    doc.save(path)
+    doc.close()
+    parsed = load_pdf(path)
+    assert parsed.page_count == 2
+    assert len(parsed.pages[0].blocks) == 0
+    assert len(parsed.pages[1].blocks) == 1
+
