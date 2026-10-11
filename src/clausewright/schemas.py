@@ -99,3 +99,33 @@ class Section(BaseModel):
     def text(self) -> str:
         """Contiguous text content of all blocks in the section."""
         return "\n\n".join(b.text for b in self.blocks)
+
+
+class Chunk(BaseModel):
+    """A fixed-size text window produced by the chunker for embedding / retrieval.
+
+    Each ``Chunk`` is the atomic unit fed into the vector store.  It carries
+    full provenance so retrieved chunks can be traced back to the source
+    section and page.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    chunk_id: str = Field(..., min_length=1, description="Unique identifier: '<doc_id>-<section_number>-<index>'")
+    doc_id: str = Field(..., min_length=1)
+    section_number: str = Field(..., min_length=1)
+    chunk_index: int = Field(..., ge=0, description="0-based position within the parent section")
+    text: str = Field(..., min_length=1)
+    page_range: tuple[int, int] = Field(..., description="(start_page, end_page) inclusive")
+    word_count: int = Field(..., ge=1)
+
+    @field_validator("page_range")
+    @classmethod
+    def validate_page_range(cls, v: tuple[int, int]) -> tuple[int, int]:
+        start, end = v
+        if start < 1 or end < 1:
+            raise ValueError(f"Page numbers must be >= 1, got {v}")
+        if start > end:
+            raise ValueError(f"start_page ({start}) cannot exceed end_page ({end})")
+        return v
+
