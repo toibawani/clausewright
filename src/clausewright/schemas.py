@@ -71,3 +71,31 @@ class ParsedDocument(BaseModel):
                 f"Page numbers must be sequential 1..{len(self.pages)}, got {actual_numbers}"
             )
         return self
+
+
+class Section(BaseModel):
+    """A semantic section or subsection in a contract document."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    section_number: str = Field(..., min_length=1)
+    title: str | None = None
+    level: int = Field(default=1, ge=1)
+    parent_number: str | None = None
+    blocks: list[Block] = Field(default_factory=list)
+    page_range: tuple[int, int] = Field(..., description="(start_page, end_page) inclusive")
+
+    @field_validator("page_range")
+    @classmethod
+    def validate_page_range(cls, v: tuple[int, int]) -> tuple[int, int]:
+        start, end = v
+        if start < 1 or end < 1:
+            raise ValueError(f"Page numbers must be >= 1, got {v}")
+        if start > end:
+            raise ValueError(f"start_page ({start}) cannot exceed end_page ({end})")
+        return v
+
+    @property
+    def text(self) -> str:
+        """Contiguous text content of all blocks in the section."""
+        return "\n\n".join(b.text for b in self.blocks)
