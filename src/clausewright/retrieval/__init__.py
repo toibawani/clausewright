@@ -1,5 +1,6 @@
-"""Dense-retrieval components: embedding and FAISS index management."""
+"""Retrieval components: dense embedding, hybrid BM25+FAISS search, and reranking."""
 
 from clausewright.retrieval.embedder import Embedder
+from clausewright.retrieval.hybrid_search import HybridRetriever
 
-__all__ = ["Embedder"]
+__all__ = ["Embedder", "HybridRetriever"]
