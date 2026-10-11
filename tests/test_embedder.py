@@ -83,7 +83,9 @@ def test_embedder_loads_model(tmp_path: Path) -> None:
     mock_model.get_sentence_embedding_dimension.return_value = _DIM
     mock_model.encode.side_effect = lambda t, **kw: np.zeros((len(t), _DIM), dtype=np.float32)
 
-    with patch("clausewright.retrieval.embedder.SentenceTransformer", return_value=mock_model) as cls:
+    with patch(
+        "clausewright.retrieval.embedder.SentenceTransformer", return_value=mock_model
+    ) as cls:
         Embedder(model_name="test-model", device="cpu", index_dir=tmp_path)
         cls.assert_called_once_with("test-model", device="cpu")
 
@@ -240,7 +242,6 @@ def test_save_creates_index_dir_if_missing(tmp_path: Path) -> None:
     embedder.save(idx, ch, name="nested")
     assert (nested / "nested.faiss").exists()
     assert (nested / "nested.chunks.json").exists()
-
 
 
 # ---------------------------------------------------------------------------

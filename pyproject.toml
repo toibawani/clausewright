@@ -35,3 +35,4 @@ src = ["src", "tests"]
 [tool.mypy]
 strict = true
 mypy_path = "src"
+warn_unused_ignores = false

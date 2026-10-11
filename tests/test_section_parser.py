@@ -68,12 +68,14 @@ def test_single_page_no_headings_returns_preamble() -> None:
 
 
 def test_simple_numeric_headings() -> None:
-    doc = _doc([
-        _block("1 Definitions"),
-        _block("This section defines terms."),
-        _block("2 Obligations"),
-        _block("Each party shall..."),
-    ])
+    doc = _doc(
+        [
+            _block("1 Definitions"),
+            _block("This section defines terms."),
+            _block("2 Obligations"),
+            _block("Each party shall..."),
+        ]
+    )
     sections = parse_sections(doc, use_font_heuristic=False)
     nums = [s.section_number for s in sections]
     assert "1" in nums
@@ -82,12 +84,14 @@ def test_simple_numeric_headings() -> None:
 
 def test_dotted_numeric_heading_level() -> None:
     """1.2 should produce level=2 and parent_number='1'."""
-    doc = _doc([
-        _block("1 Main Section"),
-        _block("Body text."),
-        _block("1.2 Sub Section"),
-        _block("Sub body text."),
-    ])
+    doc = _doc(
+        [
+            _block("1 Main Section"),
+            _block("Body text."),
+            _block("1.2 Sub Section"),
+            _block("Sub body text."),
+        ]
+    )
     sections = parse_sections(doc, use_font_heuristic=False)
     sub = next(s for s in sections if s.section_number == "1.2")
     assert sub.level == 2
@@ -95,10 +99,12 @@ def test_dotted_numeric_heading_level() -> None:
 
 
 def test_triple_dotted_heading_level() -> None:
-    doc = _doc([
-        _block("1.2.3 Deep subsection"),
-        _block("Body."),
-    ])
+    doc = _doc(
+        [
+            _block("1.2.3 Deep subsection"),
+            _block("Body."),
+        ]
+    )
     sections = parse_sections(doc, use_font_heuristic=False)
     deep = next(s for s in sections if s.section_number == "1.2.3")
     assert deep.level == 3
@@ -107,10 +113,12 @@ def test_triple_dotted_heading_level() -> None:
 
 def test_heading_with_trailing_dot() -> None:
     """'1.' should be treated identically to '1'."""
-    doc = _doc([
-        _block("1. Definitions"),
-        _block("Body."),
-    ])
+    doc = _doc(
+        [
+            _block("1. Definitions"),
+            _block("Body."),
+        ]
+    )
     sections = parse_sections(doc, use_font_heuristic=False)
     assert any(s.section_number == "1" for s in sections)
 
@@ -187,11 +195,13 @@ def test_page_range_second_section() -> None:
 
 
 def test_section_text_concatenates_blocks() -> None:
-    doc = _doc([
-        _block("1 Definitions"),
-        _block("First paragraph."),
-        _block("Second paragraph."),
-    ])
+    doc = _doc(
+        [
+            _block("1 Definitions"),
+            _block("First paragraph."),
+            _block("Second paragraph."),
+        ]
+    )
     sections = parse_sections(doc, use_font_heuristic=False)
     sec = next(s for s in sections if s.section_number == "1")
     assert "First paragraph." in sec.text
@@ -204,30 +214,36 @@ def test_section_text_concatenates_blocks() -> None:
 
 
 def test_bold_block_becomes_heading_with_heuristic() -> None:
-    doc = _doc([
-        _block("Introduction", is_bold=True),
-        _block("Some body text."),
-    ])
+    doc = _doc(
+        [
+            _block("Introduction", is_bold=True),
+            _block("Some body text."),
+        ]
+    )
     sections = parse_sections(doc, use_font_heuristic=True)
     # The bold block should produce an H1 section
     assert any(s.section_number.startswith("H") for s in sections)
 
 
 def test_large_font_block_becomes_heading_with_heuristic() -> None:
-    doc = _doc([
-        _block("Introduction", font_size=18.0),  # >> avg of 12
-        _block("Body text.", font_size=12.0),
-    ])
+    doc = _doc(
+        [
+            _block("Introduction", font_size=18.0),  # >> avg of 12
+            _block("Body text.", font_size=12.0),
+        ]
+    )
     sections = parse_sections(doc, use_font_heuristic=True)
     assert any(s.section_number.startswith("H") for s in sections)
 
 
 def test_no_heuristic_heading_for_single_token_bold() -> None:
     """A single-word bold block should NOT become a heading (below min_heading_words)."""
-    doc = _doc([
-        _block("Note", is_bold=True),
-        _block("Body text."),
-    ])
+    doc = _doc(
+        [
+            _block("Note", is_bold=True),
+            _block("Body text."),
+        ]
+    )
     # min_heading_words defaults to 1, so "Note" (1 word) still qualifies.
     # Adjust min_heading_words to 2 to suppress it.
     sections = parse_sections(doc, use_font_heuristic=True, min_heading_words=2)
@@ -236,10 +252,12 @@ def test_no_heuristic_heading_for_single_token_bold() -> None:
 
 
 def test_heuristic_disabled_ignores_bold() -> None:
-    doc = _doc([
-        _block("Introduction", is_bold=True, font_size=18.0),
-        _block("Body."),
-    ])
+    doc = _doc(
+        [
+            _block("Introduction", is_bold=True, font_size=18.0),
+            _block("Body."),
+        ]
+    )
     sections = parse_sections(doc, use_font_heuristic=False)
     assert all(not s.section_number.startswith("H") for s in sections)
 
@@ -256,14 +274,16 @@ def test_returns_list_of_section_instances() -> None:
 
 
 def test_ordering_preserved() -> None:
-    doc = _doc([
-        _block("1 First"),
-        _block("Body 1."),
-        _block("2 Second"),
-        _block("Body 2."),
-        _block("3 Third"),
-        _block("Body 3."),
-    ])
+    doc = _doc(
+        [
+            _block("1 First"),
+            _block("Body 1."),
+            _block("2 Second"),
+            _block("Body 2."),
+            _block("3 Third"),
+            _block("Body 3."),
+        ]
+    )
     sections = parse_sections(doc, use_font_heuristic=False)
     nums = [s.section_number for s in sections]
     assert nums == ["1", "2", "3"]

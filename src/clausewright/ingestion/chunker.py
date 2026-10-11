@@ -47,7 +47,7 @@ class _WordSpan:
     """Maps a range of word positions back to the originating Block."""
 
     start: int  # inclusive
-    end: int    # exclusive
+    end: int  # exclusive
     block: Block
 
 

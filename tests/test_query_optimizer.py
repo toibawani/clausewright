@@ -14,7 +14,6 @@ import pytest
 
 from clausewright.generation.query_optimizer import QueryOptimizer
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

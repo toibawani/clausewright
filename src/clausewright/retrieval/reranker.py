@@ -136,7 +136,7 @@ class CrossEncoderReranker:
             raise ValueError(f"top_n must be >= 1, got {top_n}")
 
         chunks = [c for c, _ in candidates]
-        pairs = [[query, c.text] for c in chunks]
+        pairs: list[tuple[str, str]] = [(query, c.text) for c in chunks]
 
         logger.debug(
             "Reranking %d candidates with cross-encoder '%s'",

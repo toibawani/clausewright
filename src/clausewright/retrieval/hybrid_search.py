@@ -163,9 +163,7 @@ class HybridRetriever:
         scores = self._bm25.get_scores(tokens)
 
         # Pair (chunk_id, score) and sort descending, take top n
-        indexed = sorted(
-            enumerate(scores), key=lambda x: x[1], reverse=True
-        )[:n]
+        indexed = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:n]
         return [self.chunks[i].chunk_id for i, _score in indexed]
 
     # ------------------------------------------------------------------

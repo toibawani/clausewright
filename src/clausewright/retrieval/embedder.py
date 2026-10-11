@@ -92,8 +92,8 @@ class Embedder:
 
     @property
     def embedding_dim(self) -> int:
-        """Dimensionality of the embedding vectors produced by this model."""
-        return int(self._model.get_sentence_embedding_dimension())  # type: ignore[no-untyped-call]
+        dim = self._model.get_sentence_embedding_dimension()  # type: ignore[no-untyped-call]
+        return int(dim) if dim is not None else 384
 
     def embed(self, texts: list[str], *, normalize: bool = True) -> np.ndarray:
         """Encode a list of texts into a float32 embedding matrix.

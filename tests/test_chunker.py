@@ -257,4 +257,3 @@ def test_chunk_is_frozen() -> None:
     chunk = chunk_sections("doc", [sec])[0]
     with pytest.raises(ValidationError, match="frozen"):
         chunk.text = "mutated"  # type: ignore[misc]
-

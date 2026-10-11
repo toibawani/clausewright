@@ -61,11 +61,17 @@ _FONT_RATIO_THRESHOLD: Final[float] = 1.15
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _roman_to_int(s: str) -> int:
     """Convert a Roman numeral string to an integer."""
     vals: dict[str, int] = {
-        "I": 1, "V": 5, "X": 10, "L": 50,
-        "C": 100, "D": 500, "M": 1000,
+        "I": 1,
+        "V": 5,
+        "X": 10,
+        "L": 50,
+        "C": 100,
+        "D": 500,
+        "M": 1000,
     }
     result = 0
     prev = 0
@@ -127,6 +133,7 @@ def _match_heading(block: Block) -> tuple[str, str | None] | None:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def parse_sections(
     doc: ParsedDocument,
     *,
@@ -186,7 +193,9 @@ def parse_sections(
             if heading_match is None and use_font_heuristic:
                 word_count = len(block.text.split())
                 is_large = block.font_size >= avg_font * _FONT_RATIO_THRESHOLD
-                if (block.is_bold or is_large) and min_heading_words <= word_count <= max_heading_words:
+                if (
+                    block.is_bold or is_large
+                ) and min_heading_words <= word_count <= max_heading_words:
                     auto_heading_counter += 1
                     heading_match = (f"H{auto_heading_counter}", block.text.strip())
 

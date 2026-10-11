@@ -135,8 +135,8 @@ class QueryOptimizer:
                 system=system,
                 messages=[{"role": "user", "content": question}],
             )
-            # Extract text from the first content block
-            text = message.content[0].text.strip()
+            block = message.content[0]
+            text = str(getattr(block, "text", "")).strip()
             if not text:
                 raise ValueError("empty LLM response")
             logger.debug("HyDE generated (%d chars) for: %s", len(text), question[:60])
@@ -183,7 +183,7 @@ class QueryOptimizer:
             "You are a query expansion assistant for a legal contract retrieval system. "
             f"Rephrase the user's question into {n_variants} alternative search queries "
             "that cover different angles (legal terminology, broader scope, specific sub-questions). "
-            f'Respond with a JSON array of exactly {n_variants} strings and nothing else. '
+            f"Respond with a JSON array of exactly {n_variants} strings and nothing else. "
             'Example: ["variant 1", "variant 2", "variant 3"]'
         )
 
@@ -194,7 +194,8 @@ class QueryOptimizer:
                 system=system,
                 messages=[{"role": "user", "content": question}],
             )
-            raw = message.content[0].text.strip()
+            block = message.content[0]
+            raw = str(getattr(block, "text", "")).strip()
 
             # Extract JSON array — handle markdown code fences defensively.
             match = re.search(r"\[.*?\]", raw, re.DOTALL)
@@ -203,9 +204,7 @@ class QueryOptimizer:
 
             variants: list[str] = json.loads(match.group())
             if not isinstance(variants, list) or len(variants) != n_variants:
-                raise ValueError(
-                    f"Expected list of {n_variants} strings, got: {variants}"
-                )
+                raise ValueError(f"Expected list of {n_variants} strings, got: {variants}")
             # Ensure all elements are non-empty strings
             variants = [str(v).strip() for v in variants if str(v).strip()]
             if len(variants) != n_variants:
@@ -215,7 +214,5 @@ class QueryOptimizer:
             return variants
 
         except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "Query variant generation failed (%s); returning original query", exc
-            )
+            logger.warning("Query variant generation failed (%s); returning original query", exc)
             return [question]

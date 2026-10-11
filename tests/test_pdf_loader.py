@@ -88,4 +88,3 @@ def test_partially_blank_pages_succeed(tmp_path: Path) -> None:
     assert parsed.page_count == 2
     assert len(parsed.pages[0].blocks) == 0
     assert len(parsed.pages[1].blocks) == 1
-

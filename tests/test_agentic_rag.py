@@ -7,14 +7,12 @@ are fully mocked so tests run without network access or model weights.
 from __future__ import annotations
 
 import json
-from typing import Any
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import pytest
 
-from clausewright.generation.agentic_rag import AgenticRAG, RAGResponse, _ABSTAIN_SENTINEL
+from clausewright.generation.agentic_rag import _ABSTAIN_SENTINEL, AgenticRAG, RAGResponse
 from clausewright.schemas import Chunk
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,9 +79,7 @@ def _build_pipeline(
     reranker.rerank.return_value = [(c, 0.8) for c in rr_chunks]
 
     verdicts = grader_verdicts if grader_verdicts is not None else ["relevant"] * len(rr_chunks)
-    variant_text = variant_json or json.dumps(
-        ["variant A", "variant B", "variant C"]
-    )
+    variant_text = variant_json or json.dumps(["variant A", "variant B", "variant C"])
 
     # Build side_effect sequence:
     # grader messages first, then interleave variant + grader for retries,
@@ -235,7 +231,7 @@ def test_answer_retries_on_low_relevance() -> None:
     # Second attempt: all relevant
     all_verdicts = irrelevant_verdicts + ["relevant"] * 3
 
-    pipeline, client = _build_pipeline(
+    pipeline, _client = _build_pipeline(
         grader_verdicts=all_verdicts,
         max_retries=2,
         relevance_threshold=0.5,
@@ -296,8 +292,12 @@ def test_answer_abstains_on_generator_exception() -> None:
     client = MagicMock()
     # Grader calls succeed (relevant), generator call raises
     grader_msg = _mock_llm_message("relevant")
-    client.messages.create.side_effect = [grader_msg, grader_msg, grader_msg,
-                                           RuntimeError("LLM down")]
+    client.messages.create.side_effect = [
+        grader_msg,
+        grader_msg,
+        grader_msg,
+        RuntimeError("LLM down"),
+    ]
 
     pipeline = AgenticRAG(
         client=client,

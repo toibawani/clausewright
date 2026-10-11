@@ -90,14 +90,14 @@ _ABSTAIN_SENTINEL: Final[str] = "INSUFFICIENT_EVIDENCE"
 class RAGResponse(BaseModel):
     """Structured output from the CRAG pipeline."""
 
-    question: str = Field(..., description="Original user question")
-    answer: str | None = Field(None, description="Generated answer; None when abstained")
+    question: str = Field(description="Original user question")
+    answer: str | None = Field(default=None, description="Generated answer; None when abstained")
     citations: list[str] = Field(
         default_factory=list, description="Section numbers cited in the answer"
     )
-    abstained: bool = Field(False, description="True when evidence was insufficient")
-    abstain_reason: str | None = Field(None, description="Why the system abstained")
-    retrieval_attempts: int = Field(1, ge=1, description="Number of retrieval rounds used")
+    abstained: bool = Field(default=False, description="True when evidence was insufficient")
+    abstain_reason: str | None = Field(default=None, description="Why the system abstained")
+    retrieval_attempts: int = Field(default=1, ge=1, description="Number of retrieval rounds used")
     chunks_used: list[Chunk] = Field(
         default_factory=list,
         description="Final chunks passed to the generator",
@@ -174,7 +174,8 @@ class AgenticRAG:
                 system=system,
                 messages=[{"role": "user", "content": prompt}],
             )
-            verdict = msg.content[0].text.strip().lower()
+            block = msg.content[0]
+            verdict = str(getattr(block, "text", "")).strip().lower()
             return verdict.startswith("relevant")
         except Exception as exc:  # noqa: BLE001
             logger.warning("Relevance grading failed for chunk %s: %s", chunk.chunk_id, exc)
@@ -224,7 +225,8 @@ class AgenticRAG:
             system=system,
             messages=[{"role": "user", "content": user_content}],
         )
-        return msg.content[0].text.strip()
+        block = msg.content[0]
+        return str(getattr(block, "text", "")).strip()
 
     @staticmethod
     def _extract_citations(answer: str) -> list[str]:
@@ -260,8 +262,12 @@ class AgenticRAG:
 
         while attempts <= self._max_retries:
             attempts += 1
-            logger.info("CRAG loop attempt %d/%d for question: %s",
-                        attempts, self._max_retries + 1, question[:60])
+            logger.info(
+                "CRAG loop attempt %d/%d for question: %s",
+                attempts,
+                self._max_retries + 1,
+                question[:60],
+            )
 
             # ── Step 1: Retrieve + Rerank ──────────────────────────────────
             chunks = self._retrieve_and_rerank(current_query)
@@ -276,9 +282,7 @@ class AgenticRAG:
 
             # ── Step 2: Relevance grading (CRAG) ──────────────────────────
             rel_fraction = self._relevance_fraction(question, chunks)
-            logger.info(
-                "Relevance fraction: %.2f (threshold %.2f)", rel_fraction, self._threshold
-            )
+            logger.info("Relevance fraction: %.2f (threshold %.2f)", rel_fraction, self._threshold)
 
             if rel_fraction >= self._threshold or attempts > self._max_retries:
                 # Acceptable relevance — proceed to generation

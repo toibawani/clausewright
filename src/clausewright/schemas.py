@@ -111,7 +111,9 @@ class Chunk(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    chunk_id: str = Field(..., min_length=1, description="Unique identifier: '<doc_id>-<section_number>-<index>'")
+    chunk_id: str = Field(
+        ..., min_length=1, description="Unique identifier: '<doc_id>-<section_number>-<index>'"
+    )
     doc_id: str = Field(..., min_length=1)
     section_number: str = Field(..., min_length=1)
     chunk_index: int = Field(..., ge=0, description="0-based position within the parent section")
@@ -128,4 +130,3 @@ class Chunk(BaseModel):
         if start > end:
             raise ValueError(f"start_page ({start}) cannot exceed end_page ({end})")
         return v
-

@@ -104,4 +104,3 @@ def test_frozen_immutability() -> None:
     block = make_block(1)
     with pytest.raises(ValidationError):
         block.text = "Changed"
-
