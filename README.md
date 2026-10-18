@@ -9,9 +9,13 @@ retrieved evidence is weak.
 
 ## Status
 
-Milestone 1 of 9 (project skeleton). Nothing is evaluated yet, so this README makes
-no accuracy claims. Results will be added in the final milestone, from a hand-labelled
-gold set, whatever they turn out to be.
+Pre-alpha. Ingestion (PDF to hierarchical sections to chunks), hybrid
+retrieval (BM25 + dense embeddings, fused with RRF, cross-encoder reranked),
+and a grounded answer engine (retrieve, generate, verify every citation
+against retrieved text, abstain when evidence is weak) are built and unit
+tested. There is no evaluation set yet, so this README makes no accuracy
+claims. Numbers will be added once a hand-labelled gold set exists, whatever
+they turn out to be.
 
 ## Scope
 
