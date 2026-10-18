@@ -10,3 +10,9 @@ __pycache__/
 # Corpus and built indexes are reproducible; keep them out of git.
 data/raw/
 data/index/
+data/eval/
+data/llm_cache/
+
+# Result files embed contract-derived quotes; never commit them.
+results/
+
