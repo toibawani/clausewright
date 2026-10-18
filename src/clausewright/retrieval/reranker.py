@@ -136,7 +136,7 @@ class CrossEncoderReranker:
             raise ValueError(f"top_n must be >= 1, got {top_n}")
 
         chunks = [c for c, _ in candidates]
-        pairs = [[query, c.text] for c in chunks]
+        pairs: list[tuple[str, str]] = [(query, c.text) for c in chunks]
 
         logger.debug(
             "Reranking %d candidates with cross-encoder '%s'",
@@ -144,12 +144,13 @@ class CrossEncoderReranker:
             self._model_name,
         )
 
-        raw_scores: list[float] = self._model.predict(  # type: ignore[assignment]
-            pairs,
+        predictions = self._model.predict(  # type: ignore[no-untyped-call]
+            pairs,  # type: ignore[arg-type]
             batch_size=self._batch_size,
             show_progress_bar=False,
             convert_to_numpy=False,
         )
+        raw_scores: list[float] = [float(s) for s in predictions]
 
         # Pair up and sort descending
         scored: list[tuple[Chunk, float]] = [

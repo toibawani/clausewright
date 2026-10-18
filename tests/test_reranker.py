@@ -197,8 +197,8 @@ def test_rerank_passes_correct_pairs_to_model() -> None:
 
     call_args = mock_model.predict.call_args
     pairs_arg = call_args[0][0]
-    assert pairs_arg[0] == [query, cands[0][0].text]
-    assert pairs_arg[1] == [query, cands[1][0].text]
+    assert pairs_arg[0] == (query, cands[0][0].text)
+    assert pairs_arg[1] == (query, cands[1][0].text)
 
 
 def test_rerank_single_candidate() -> None:

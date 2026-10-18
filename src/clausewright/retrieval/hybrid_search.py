@@ -172,6 +172,29 @@ class HybridRetriever:
     # Public search
     # ------------------------------------------------------------------
 
+    def search_sparse(self, query: str, top_k: int = 10) -> list[tuple[Chunk, float]]:
+        """Retrieve the *top_k* chunks with BM25 only (dense channel disabled).
+
+        Exists for ablation studies comparing channels; product code paths use
+        :meth:`search`.
+        """
+        if not query.strip():
+            raise ValueError("query must be non-empty")
+        if top_k < 1:
+            raise ValueError(f"top_k must be >= 1, got {top_k}")
+        tokens = _tokenize(query)
+        scores = self._bm25.get_scores(tokens)
+        indexed = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:top_k]
+        return [(self.chunks[i], float(score)) for i, score in indexed]
+
+    def search_dense(self, query: str, top_k: int = 10) -> list[tuple[Chunk, float]]:
+        """Retrieve the *top_k* chunks with dense embeddings only (BM25 disabled)."""
+        if not query.strip():
+            raise ValueError("query must be non-empty")
+        if top_k < 1:
+            raise ValueError(f"top_k must be >= 1, got {top_k}")
+        return self.embedder.search(query, self.index, self.chunks, k=top_k)
+
     def search(self, query: str, top_k: int = 10) -> list[tuple[Chunk, float]]:
         """Retrieve the *top_k* most relevant chunks via hybrid RRF search.
 
