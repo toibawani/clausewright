@@ -16,6 +16,7 @@ from clausewright.eval.dataset import (
     CUAD_SMALL,
     EvalItem,
     SuiteConfig,
+    _find_default_cuad_paths,
     build_eval_set,
     dataset_hash,
     save_manifests,
@@ -185,7 +186,12 @@ def test_save_manifests_creates_valid_json(fixture_root: Path, tmp_path: Path) -
     assert "sha256" in dev_data["contracts"][0]
 
 
+_json_path, _pdf_dir = _find_default_cuad_paths()
+_cuad_present = _json_path.is_file() and _pdf_dir.is_dir()
+
+
 @pytest.mark.real_cuad
+@pytest.mark.skipif(not _cuad_present, reason="CUAD dataset not fetched under data/raw/cuad")
 def test_real_cuad_builds() -> None:
     es = build_eval_set(CUAD_SMALL)
     assert len(es.items) == 450
