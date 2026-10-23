@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from clausewright.api.auth import CurrentUser
 from clausewright.api.schemas import ErrorResponse, HealthResponse
 from clausewright.api.settings import Settings, get_git_commit
 
@@ -114,6 +115,39 @@ def create_app() -> FastAPI:
             git_commit=git_commit,
             uptime_seconds=round(uptime, 3),
         )
+
+    @app.get(
+        "/me",
+        summary="Current user profile and tenant scope",
+        tags=["Auth"],
+    )
+    async def get_me(
+        current_user: CurrentUser,
+    ) -> dict[str, str | None]:
+        """Return the calling user's identity and tenant isolation boundary."""
+        return {
+            "user_id": current_user.user_id,
+            "tenant_id": current_user.tenant_id,
+            "email": current_user.email,
+            "role": current_user.role,
+        }
+
+    @app.get(
+        "/tenants/{target_tenant_id}/verify",
+        summary="Verify tenant membership",
+        tags=["Auth"],
+    )
+    async def verify_tenant_membership(
+        target_tenant_id: str,
+        current_user: CurrentUser,
+    ) -> dict[str, str]:
+        """Verify the caller belongs to target_tenant_id, rejecting cross-tenant calls."""
+        if current_user.tenant_id != target_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Forbidden: cross-tenant access denied (caller belongs to '{current_user.tenant_id}')",
+            )
+        return {"status": "authorized", "tenant_id": target_tenant_id, "user_id": current_user.user_id}
 
     return app
 
