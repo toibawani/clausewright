@@ -301,3 +301,63 @@ def test_exact_keyword_chunk_appears_in_results(tmp_path: Path) -> None:
     result = retriever.search(keyword, top_k=10)
     result_ids = [c.chunk_id for c, _ in result]
     assert keyword_chunk.chunk_id in result_ids
+
+
+# ---------------------------------------------------------------------------
+# Channel accessors for ablation studies (search_sparse / search_dense)
+# ---------------------------------------------------------------------------
+
+
+def test_search_sparse_top_chunk_has_keyword(tmp_path: Path) -> None:
+    """BM25-only finds the exact-match chunk first, independent of the dense mock."""
+    embedder, _ = _make_embedder(tmp_path)
+    keyword = "xyzindemnificationxyz"
+    chunks = [
+        Chunk(
+            chunk_id=f"doc-1-{i}",
+            doc_id="doc",
+            section_number="1",
+            chunk_index=i,
+            text=f"generic contract clause number {i}",
+            page_range=(1, 1),
+            word_count=5,
+        )
+        for i in range(5)
+    ]
+    chunks.append(
+        Chunk(
+            chunk_id="doc-1-5",
+            doc_id="doc",
+            section_number="1",
+            chunk_index=5,
+            text=f"This section covers {keyword} obligations.",
+            page_range=(1, 1),
+            word_count=6,
+        )
+    )
+    index, chunks_out = embedder.build_index(chunks)
+    retriever = HybridRetriever(embedder=embedder, index=index, chunks=chunks_out)
+    result = retriever.search_sparse(keyword, top_k=3)
+    assert result[0][0].chunk_id == "doc-1-5"
+    assert isinstance(result[0][1], float)
+
+
+def test_search_dense_returns_embedder_order(tmp_path: Path) -> None:
+    """Dense-only returns the embedder's order with float scores."""
+    retriever = _build_retriever(tmp_path, n_chunks=6)
+    dense = retriever._dense_ranked("contract clause", 4)
+    result = retriever.search_dense("contract clause", top_k=4)
+    assert [c.chunk_id for c, _ in result] == dense
+    assert all(isinstance(s, float) for _, s in result)
+
+
+def test_channel_accessors_validate_input(tmp_path: Path) -> None:
+    retriever = _build_retriever(tmp_path, n_chunks=3)
+    with pytest.raises(ValueError, match="non-empty"):
+        retriever.search_sparse("   ", top_k=3)
+    with pytest.raises(ValueError, match="non-empty"):
+        retriever.search_dense("   ", top_k=3)
+    with pytest.raises(ValueError, match="top_k must be"):
+        retriever.search_sparse("q", top_k=0)
+    with pytest.raises(ValueError, match="top_k must be"):
+        retriever.search_dense("q", top_k=0)
