@@ -17,6 +17,7 @@ dependencies = [
     "rank-bm25",
     "anthropic",
     "pyjwt>=2.8.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

@@ -62,6 +62,68 @@ def _block_from_dict(raw: dict[str, Any], page_number: int) -> Block | None:
     )
 
 
+def _extract_pages(pdf: Any, source_label: str) -> list[Page]:
+    """Extract pages from an open PyMuPDF document."""
+    pages: list[Page] = []
+    for index, pdf_page in enumerate(pdf, start=1):
+        raw_blocks = pdf_page.get_text("dict", sort=True).get("blocks", [])
+        blocks = [
+            b
+            for raw in raw_blocks
+            if raw.get("type") == 0
+            if (b := _block_from_dict(raw, index)) is not None
+        ]
+        pages.append(
+            Page(
+                number=index,
+                width=float(pdf_page.rect.width),
+                height=float(pdf_page.rect.height),
+                blocks=blocks,
+            )
+        )
+    return pages
+
+
+def load_pdf_from_bytes(
+    raw: bytes,
+    *,
+    doc_id: str,
+    filename: str = "upload.pdf",
+) -> ParsedDocument:
+    """Parse a PDF from raw bytes without touching the filesystem.
+
+    Parameters
+    ----------
+    raw:
+        Raw PDF bytes (e.g., from an HTTP upload).
+    doc_id:
+        Unique document identifier to embed in the result.
+    filename:
+        Original filename (used only as source label; not written to disk).
+
+    Raises
+    ------
+    ValueError
+        If the bytes cannot be opened as a PDF or contain no extractable text.
+    """
+    try:
+        pdf = pymupdf.open(stream=raw, filetype="pdf")  # type: ignore[no-untyped-call]
+    except Exception as exc:
+        raise ValueError(f"Cannot open bytes as PDF: {exc}") from exc
+
+    with pdf:
+        pages = _extract_pages(pdf, filename)
+
+    if not any(page.blocks for page in pages):
+        raise ValueError(f"{filename!r} has no extractable text (scanned PDF?)")
+
+    return ParsedDocument(
+        doc_id=doc_id,
+        source_path=filename,
+        pages=pages,
+    )
+
+
 def load_pdf(path: Path, doc_id: str | None = None) -> ParsedDocument:
     """Parse a PDF into pages of text blocks in reading order.
 
@@ -71,24 +133,8 @@ def load_pdf(path: Path, doc_id: str | None = None) -> ParsedDocument:
     if not path.is_file():
         raise FileNotFoundError(path)
 
-    pages: list[Page] = []
     with pymupdf.open(path) as pdf:  # type: ignore[no-untyped-call]
-        for index, pdf_page in enumerate(pdf, start=1):
-            raw_blocks = pdf_page.get_text("dict", sort=True).get("blocks", [])
-            blocks = [
-                b
-                for raw in raw_blocks
-                if raw.get("type") == 0
-                if (b := _block_from_dict(raw, index)) is not None
-            ]
-            pages.append(
-                Page(
-                    number=index,
-                    width=float(pdf_page.rect.width),
-                    height=float(pdf_page.rect.height),
-                    blocks=blocks,
-                )
-            )
+        pages = _extract_pages(pdf, str(path))
 
     if not any(page.blocks for page in pages):
         raise ValueError(f"{path} has no extractable text (scanned PDF?)")
