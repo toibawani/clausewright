@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from clausewright.config import PATHS
 from clausewright.eval.baselines import fixed_window_chunks
-from clausewright.eval.dataset import EvalItem, EvalSet, build_eval_set, CUAD_SMALL
+from clausewright.eval.dataset import CUAD_SMALL, EvalItem, EvalSet, build_eval_set
 from clausewright.eval.metrics import SPAN_OVERLAP_THRESHOLD, mean, mrr_score, recall_at_k
 from clausewright.ingestion import chunk_sections, load_pdf, parse_sections
 from clausewright.retrieval.embedder import Embedder
@@ -151,7 +151,7 @@ def evaluate_retrieval(
         summary_scores[cfg] = asdict(scores)
 
     report = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "split": split,
         "span_overlap_threshold": SPAN_OVERLAP_THRESHOLD,
         "n_contracts_evaluated": len(contract_titles),
