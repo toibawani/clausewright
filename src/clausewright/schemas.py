@@ -118,6 +118,14 @@ class Chunk(BaseModel):
     text: str = Field(..., min_length=1)
     page_range: tuple[int, int] = Field(..., description="(start_page, end_page) inclusive")
     word_count: int = Field(..., ge=1)
+    breadcrumbs: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Hierarchical lineage path: e.g. ('Article 12: Indemnification', 'Section 12.3: Carve-Outs')",
+    )
+    contextual_text: str | None = Field(
+        default=None,
+        description="Chunk text prepended with hierarchical lineage for context-aware retrieval",
+    )
 
     @field_validator("page_range")
     @classmethod

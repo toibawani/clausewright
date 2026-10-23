@@ -7,6 +7,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -14,8 +15,10 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from clausewright.api.auth import CurrentUser
+from clausewright.api.documents import router as documents_router
 from clausewright.api.schemas import ErrorResponse, HealthResponse
 from clausewright.api.settings import Settings, get_git_commit
+from clausewright.store.document_store import DocumentStore
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +28,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Lifespan manager: initialize runtime state and dependencies."""
     app.state.start_time = time.monotonic()
     app.state.git_commit = get_git_commit()
-    app.state.settings = Settings.load()
+    settings: Settings = Settings.load()
+    app.state.settings = settings
     logger.info(
         "Clausewright API starting (version=%s, commit=%s, env=%s)",
-        app.state.settings.app_version,
+        settings.app_version,
         app.state.git_commit,
-        app.state.settings.environment,
+        settings.environment,
     )
+
+    # Initialize the document store (SQLite + FAISS, no embedder in default mode)
+    store_root = Path("data/store")
+    app.state.document_store = DocumentStore(store_root=store_root, embedder=None)
+
     yield
+
+    # Shutdown
+    app.state.document_store.close()
     logger.info("Clausewright API shutting down")
 
 
@@ -69,7 +81,10 @@ def create_app() -> FastAPI:
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         errors = exc.errors()
-        msg = "; ".join(f"{'.'.join(str(loc) for loc in err.get('loc', []))}: {err.get('msg')}" for err in errors)
+        msg = "; ".join(
+            f"{'.'.join(str(loc) for loc in err.get('loc', []))}: {err.get('msg')}"
+            for err in errors
+        )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=ErrorResponse(
@@ -82,7 +97,9 @@ def create_app() -> FastAPI:
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         request_id = str(uuid.uuid4())
         # Log sanitized exception with request_id for debugging
-        logger.exception("Unhandled server error [request_id=%s]: %s", request_id, type(exc).__name__)
+        logger.exception(
+            "Unhandled server error [request_id=%s]: %s", request_id, type(exc).__name__
+        )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=ErrorResponse(
@@ -91,6 +108,12 @@ def create_app() -> FastAPI:
                 request_id=request_id,
             ).model_dump(),
         )
+
+    # ---------------------------------------------------------------------------
+    # Routers
+    # ---------------------------------------------------------------------------
+
+    app.include_router(documents_router)
 
     # ---------------------------------------------------------------------------
     # Endpoints
@@ -147,7 +170,11 @@ def create_app() -> FastAPI:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Forbidden: cross-tenant access denied (caller belongs to '{current_user.tenant_id}')",
             )
-        return {"status": "authorized", "tenant_id": target_tenant_id, "user_id": current_user.user_id}
+        return {
+            "status": "authorized",
+            "tenant_id": target_tenant_id,
+            "user_id": current_user.user_id,
+        }
 
     return app
 

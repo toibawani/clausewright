@@ -134,17 +134,37 @@ CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 
 
 def require_tenant(
-    target_tenant_id: str,
-) -> collections.abc.Callable[[AuthenticatedUser], AuthenticatedUser]:
-    """Dependency factory: verify the caller belongs to the requested tenant."""
+    path_param: str = "tenant_id",
+) -> collections.abc.Callable[..., collections.abc.Coroutine[Any, Any, AuthenticatedUser]]:
+    """Dependency factory: enforce caller belongs to the tenant named in the URL path.
 
-    def _verify_tenant(
+    Parameters
+    ----------
+    path_param:
+        The name of the path parameter that carries the target tenant ID.
+        Defaults to ``"tenant_id"``.
+
+    Usage::
+
+        RequireTenant = Annotated[AuthenticatedUser, Depends(require_tenant("tenant_id"))]
+
+        @router.get("/tenants/{tenant_id}/documents")
+        async def list_docs(tenant_id: str, _user: RequireTenant) -> ...:
+            ...
+    """
+
+    async def _verify_tenant(
+        request: Request,
         current_user: CurrentUser,
     ) -> AuthenticatedUser:
-        if current_user.tenant_id != target_tenant_id:
+        target_tenant_id: str = request.path_params.get(path_param, "")
+        if not target_tenant_id or current_user.tenant_id != target_tenant_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Forbidden: cross-tenant access denied (caller belongs to tenant '{current_user.tenant_id}')",
+                detail=(
+                    f"Forbidden: cross-tenant access denied "
+                    f"(caller belongs to tenant '{current_user.tenant_id}')"
+                ),
             )
         return current_user
 
