@@ -7,6 +7,12 @@ from clausewright.retrieval.cross_reference import (
     extract_cross_references,
     normalize_reference,
 )
+from clausewright.retrieval.defined_terms import (
+    DefinedTermsExpander,
+    DefinedTermsRetriever,
+    DefinitionsIndex,
+    extract_candidate_terms,
+)
 from clausewright.retrieval.embedder import Embedder
 from clausewright.retrieval.hybrid_search import HybridRetriever
 from clausewright.retrieval.hyde import HyDERetriever
@@ -23,6 +29,9 @@ __all__ = [
     "CrossEncoderReranker",
     "CrossReferenceExpander",
     "CrossReferenceRetriever",
+    "DefinedTermsExpander",
+    "DefinedTermsRetriever",
+    "DefinitionsIndex",
     "Embedder",
     "HyDERetriever",
     "HybridRetriever",
@@ -30,6 +39,7 @@ __all__ = [
     "NormalizedReference",
     "QueryExpander",
     "RerankerComparisonReport",
+    "extract_candidate_terms",
     "extract_cross_references",
     "normalize_reference",
     "run_reranker_comparison",
