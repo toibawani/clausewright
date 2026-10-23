@@ -93,6 +93,27 @@ def _page_range_for_window(
 # ---------------------------------------------------------------------------
 
 
+def _build_section_breadcrumbs(section: Section, section_map: dict[str, Section]) -> tuple[str, ...]:
+    """Walk up parent_number to construct the hierarchical lineage tuple."""
+    crumbs: list[str] = []
+    curr: Section | None = section
+    visited: set[str] = set()
+
+    while curr is not None and curr.section_number not in visited:
+        visited.add(curr.section_number)
+        label = f"Section {curr.section_number}"
+        if curr.title:
+            label = f"{label}: {curr.title}"
+        crumbs.append(label)
+
+        if curr.parent_number and curr.parent_number in section_map:
+            curr = section_map[curr.parent_number]
+        else:
+            curr = None
+
+    return tuple(reversed(crumbs))
+
+
 def chunk_sections(
     doc_id: str,
     sections: list[Section],
@@ -135,6 +156,7 @@ def chunk_sections(
         raise ValueError(f"stride ({stride}) cannot exceed max_words ({max_words})")
 
     chunks: list[Chunk] = []
+    section_map = {s.section_number: s for s in sections}
 
     for section in sections:
         words, spans = _annotate_words(section)
@@ -143,6 +165,8 @@ def chunk_sections(
         if total_words == 0:
             # Section has no text content — skip silently
             continue
+
+        breadcrumbs = _build_section_breadcrumbs(section, section_map)
 
         chunk_index = 0
         window_start = 0
@@ -156,6 +180,7 @@ def chunk_sections(
             # Sanitize section number for use in chunk_id (replace dots/spaces)
             safe_section = section.section_number.replace(".", "_").replace(" ", "_")
             chunk_id = f"{doc_id}-{safe_section}-{chunk_index}"
+            contextual_text = f"[{' > '.join(breadcrumbs)}]\n{window_text}" if breadcrumbs else window_text
 
             chunks.append(
                 Chunk(
@@ -166,6 +191,8 @@ def chunk_sections(
                     text=window_text,
                     page_range=(page_start, page_end),
                     word_count=len(window_words),
+                    breadcrumbs=breadcrumbs,
+                    contextual_text=contextual_text,
                 )
             )
 

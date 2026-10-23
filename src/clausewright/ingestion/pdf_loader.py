@@ -64,21 +64,24 @@ def _block_from_dict(raw: dict[str, Any], page_number: int) -> Block | None:
 
 def _extract_pages(pdf: Any, source_label: str) -> list[Page]:
     """Extract pages from an open PyMuPDF document."""
+    from clausewright.ingestion.sanitizer import ContractSanitizer
+
     pages: list[Page] = []
     for index, pdf_page in enumerate(pdf, start=1):
         raw_blocks = pdf_page.get_text("dict", sort=True).get("blocks", [])
-        blocks = [
+        extracted_blocks = [
             b
             for raw in raw_blocks
             if raw.get("type") == 0
             if (b := _block_from_dict(raw, index)) is not None
         ]
+        sanitized_blocks = ContractSanitizer.sanitize_blocks(extracted_blocks)
         pages.append(
             Page(
                 number=index,
                 width=float(pdf_page.rect.width),
                 height=float(pdf_page.rect.height),
-                blocks=blocks,
+                blocks=sanitized_blocks,
             )
         )
     return pages

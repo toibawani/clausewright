@@ -91,6 +91,16 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _find_char_offset(quote: str, text: str) -> tuple[int, int] | None:
+    """Locate the exact character span of quote within chunk text."""
+    clean_q = _normalise(quote)
+    clean_t = _normalise(text)
+    idx = clean_t.find(clean_q)
+    if idx == -1:
+        return None
+    return (idx, idx + len(clean_q))
+
+
 def _strip_code_fence(raw: str) -> str:
     """Remove a surrounding ```json ... ``` fence if the model added one."""
     text = raw.strip()
@@ -160,6 +170,8 @@ def verify_claims(
                 section_number=it.chunk.section_number,
                 page_range=it.chunk.page_range,
                 score=it.score,
+                page_number=it.chunk.page_range[0],
+                char_offset=_find_char_offset(mc.quote, it.chunk.text),
             )
             for it in cited_items
         )
