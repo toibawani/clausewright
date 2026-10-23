@@ -16,6 +16,7 @@ dependencies = [
     "faiss-cpu",
     "rank-bm25",
     "anthropic",
+    "pyjwt>=2.8.0",
 ]
 
 [project.optional-dependencies]
