@@ -35,6 +35,15 @@ class Citation(BaseModel):
     section_number: str = Field(..., min_length=1)
     page_range: tuple[int, int] = Field(..., description="(start_page, end_page) inclusive")
     score: float = Field(..., description="Reranker relevance score for this chunk")
+    bounding_boxes: tuple[tuple[float, float, float, float], ...] = Field(
+        default_factory=tuple,
+        description="Bounding box coordinates (x0, y0, x1, y1) on page for visual highlight",
+    )
+    page_number: int | None = Field(default=None, description="Exact page number containing the quote")
+    char_offset: tuple[int, int] | None = Field(
+        default=None,
+        description="(start_char, end_char) zero-based offset in the chunk text",
+    )
 
 
 class Claim(BaseModel):
