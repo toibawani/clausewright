@@ -189,6 +189,41 @@ def evaluate_retrieval(
     return report
 
 
+def baseline_regressions(
+    report: dict[str, Any],
+    baseline: dict[str, Any],
+    *,
+    tolerance: float = 0.02,
+) -> list[str]:
+    """Return human-readable metric drops against a committed baseline.
+
+    Only configs present in both files are compared, and only numeric metrics
+    the baseline records. ``tolerance`` absorbs run-to-run noise; it is not a
+    licence to move the baseline down.
+    """
+    drops: list[str] = []
+    expected_configs: dict[str, Any] = baseline.get("configs", {})
+    actual_configs: dict[str, Any] = report.get("configs", {})
+
+    for cfg, expected in expected_configs.items():
+        actual = actual_configs.get(cfg)
+        if not isinstance(actual, dict):
+            drops.append(f"{cfg}: missing from this run")
+            continue
+        for metric, expected_value in expected.items():
+            if not isinstance(expected_value, (int, float)) or isinstance(expected_value, bool):
+                continue
+            got = actual.get(metric)
+            if not isinstance(got, (int, float)) or isinstance(got, bool):
+                continue
+            if got < expected_value - tolerance:
+                drops.append(
+                    f"{cfg}.{metric}: {got:.3f} < {expected_value:.3f} "
+                    f"(tolerance {tolerance:.3f})"
+                )
+    return drops
+
+
 def run_and_save_retrieval_eval(
     output_path: Path | None = None,
     split: str = "dev",

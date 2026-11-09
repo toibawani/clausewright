@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -72,7 +73,11 @@ def _cmd_dataset(args: argparse.Namespace) -> int:
 
 
 def _cmd_retrieval(args: argparse.Namespace) -> int:
-    from clausewright.eval.retrieval import CONFIGS, run_and_save_retrieval_eval
+    from clausewright.eval.retrieval import (
+        CONFIGS,
+        baseline_regressions,
+        run_and_save_retrieval_eval,
+    )
 
     if args.config == "all":
         configs_to_run = CONFIGS
@@ -87,6 +92,20 @@ def _cmd_retrieval(args: argparse.Namespace) -> int:
         sample_contracts=args.sample,
     )
     print(f"saved retrieval results: {out_path}")
+
+    if args.baseline:
+        baseline_path = Path(args.baseline)
+        report = json.loads(out_path.read_text(encoding="utf-8"))
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+        drops = baseline_regressions(report, baseline, tolerance=args.tolerance)
+        if drops:
+            print("\nregression against baseline:", file=sys.stderr)
+            for drop in drops:
+                print(f"  {drop}", file=sys.stderr)
+            return 1
+        print(
+            f"baseline check passed (tolerance {args.tolerance:.3f})"
+        )
     return 0
 
 
@@ -218,6 +237,18 @@ def main(argv: list[str] | None = None) -> int:
     ret_parser.add_argument("--split", type=str, default="dev", choices=["dev", "test"])
     ret_parser.add_argument("--sample", type=int, default=None)
     ret_parser.add_argument("--out", type=str, default=None)
+    ret_parser.add_argument(
+        "--baseline",
+        type=str,
+        default=None,
+        help="Baseline JSON to compare against; exit 1 on a metric drop",
+    )
+    ret_parser.add_argument(
+        "--tolerance",
+        type=float,
+        default=0.02,
+        help="Allowed drop below the baseline before failing (default 0.02)",
+    )
     ret_parser.set_defaults(func=_cmd_retrieval)
 
     # run subcommand — full eval with reproducibility envelope
