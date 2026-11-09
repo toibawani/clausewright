@@ -1,20 +1,19 @@
 Closes #
 
-## What
+## Summary
+<!-- 2–3 bullets: the problem and the shape of the fix. -->
 
-<!-- 1-3 bullet points summarizing what was added, modified, or removed -->
+## Key Changes
+<!-- Files and behaviours a reviewer should look at first. -->
 
-## Why
-
-<!-- Why this change is needed and how it fits into the contract RAG pipeline -->
-
-## Testing
-
-<!-- Paste REAL command output below. Never fabricate metrics or test results. -->
+## How to Test
+```bash
+ruff check . && mypy src && pytest
 ```
-$ pytest && ruff check . && mypy src
-```
+
+## Eval numbers
+<!-- Dev before/after, and test numbers when this closes a milestone.
+     "n/a" for tooling, docs, and UI chrome. -->
 
 ## Not covered
-
-<!-- Explicit scope boundaries for this PR -->
+<!-- Explicit scope boundaries. -->
