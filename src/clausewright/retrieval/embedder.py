@@ -37,8 +37,18 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
+
+# faiss and torch each ship their own OpenMP runtime. Loading both and then
+# encoding with the default thread pool segfaults the interpreter on macOS
+# (observed: exit 139 inside SentenceTransformer.encode). One thread is fast
+# enough for BGE-small and makes evaluation runs reproducible. Callers can
+# still override the variables deliberately.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import faiss  # type: ignore[import-untyped]
 import numpy as np

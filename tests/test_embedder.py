@@ -7,6 +7,7 @@ model weights and complete in milliseconds.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -75,6 +76,15 @@ def _chunks(count: int, **kw: Any) -> list[Chunk]:
 # ---------------------------------------------------------------------------
 # Embedder.__init__ / model loading
 # ---------------------------------------------------------------------------
+
+
+def test_embedder_sets_openmp_guard() -> None:
+    """faiss and torch each ship an OpenMP runtime; the guard must be set."""
+    # The module is imported at the top of this file, so the setdefault calls
+    # have already run by the time the test executes.
+    assert os.environ.get("OMP_NUM_THREADS")
+    assert os.environ.get("KMP_DUPLICATE_LIB_OK") == "TRUE"
+    assert os.environ.get("TOKENIZERS_PARALLELISM") == "false"
 
 
 def test_embedder_loads_model(tmp_path: Path) -> None:

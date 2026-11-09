@@ -231,9 +231,17 @@ def run_full_eval(
 
     # 2. Answer evaluation with replay client
     llm = ReplayLLMClient(cache_path=replay_cache, max_calls=max_llm_calls)
-    answer_res = evaluate_answers(
-        eval_set, split=split, llm_client=llm, sample_contracts=sample_contracts
-    )
+    if max_llm_calls == 0 and not replay_cache:
+        # A zero budget with no cache makes every answer an abstention; those
+        # numbers would describe the budget, not the system. Say so instead.
+        answer_res: dict[str, object] = {
+            "skipped": True,
+            "reason": "no LLM budget: set --max-llm-calls or pass --replay-cache",
+        }
+    else:
+        answer_res = evaluate_answers(
+            eval_set, split=split, llm_client=llm, sample_contracts=sample_contracts
+        )
 
     full_record: dict[str, Any] = {
         "timestamp": datetime.now(UTC).isoformat(),

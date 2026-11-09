@@ -21,7 +21,13 @@ from typing import Any
 from clausewright.config import PATHS
 from clausewright.eval.baselines import fixed_window_chunks
 from clausewright.eval.dataset import CUAD_SMALL, EvalItem, EvalSet, build_eval_set
-from clausewright.eval.metrics import SPAN_OVERLAP_THRESHOLD, mean, mrr_score, recall_at_k
+from clausewright.eval.metrics import (
+    SPAN_OVERLAP_THRESHOLD,
+    mean,
+    mrr_score,
+    overlap_ratio,
+    recall_at_k,
+)
 from clausewright.ingestion import chunk_sections, load_pdf, parse_sections
 from clausewright.retrieval.embedder import Embedder
 from clausewright.retrieval.hybrid_search import HybridRetriever
@@ -91,6 +97,11 @@ def evaluate_retrieval(
         for cfg in configs
     }
 
+    # Per-query misses for the base hybrid config, so failure analysis names
+    # root causes instead of guessing at them.
+    failures: list[dict[str, Any]] = []
+    failure_config = "hybrid" if "hybrid" in configs else configs[0]
+
     for c_idx, title in enumerate(contract_titles, start=1):
         contract_items = contracts[title]
         pdf_path = contract_items[0].pdf_path
@@ -135,6 +146,21 @@ def evaluate_retrieval(
                 res["r10"].append(r10)
                 res["mrr"].append(mrr)
 
+                if cfg == failure_config and r5 == 0.0 and golds and ranked_texts:
+                    failures.append(
+                        {
+                            "item_id": item.item_id,
+                            "contract": title,
+                            "category": item.category,
+                            "question": q,
+                            "n_gold_spans": len(golds),
+                            "best_overlap": round(
+                                max(overlap_ratio(g, t) for g in golds for t in ranked_texts), 3
+                            ),
+                            "top_sections": [c.section_number for c in ranked_chunks[:5]],
+                        }
+                    )
+
     summary_scores: dict[str, Any] = {}
     for cfg in configs:
         res = results_by_config[cfg]
@@ -157,6 +183,8 @@ def evaluate_retrieval(
         "n_contracts_evaluated": len(contract_titles),
         "n_queries_evaluated": sum(len(contracts[t]) for t in contract_titles),
         "configs": summary_scores,
+        "n_failures": len(failures),
+        "failures": failures[:50],
     }
     return report
 
