@@ -2,23 +2,26 @@
 
 Design
 ------
-*  Word-based windowing is used as a lightweight proxy for token count.
-   Typical LLM tokenisers produce ~0.75 tokens per word for English text,
-   so a ``max_words=300`` window ≈ 400 tokens — well within the limits of
-   most embedding models (512–8192 tokens).
+* Word-based windowing is used as a lightweight proxy for token count.
+  Typical LLM tokenisers produce ~0.75 tokens per word for English text,
+  so a ``max_words=300`` window ≈ 400 tokens — well within the limits of
+  most embedding models (512–8192 tokens).
 
-*  Overlap via ``stride < max_words``.  When ``stride >= max_words`` there
-   is no overlap and chunks are disjoint.
+* Overlap via ``stride < max_words``.  When ``stride >= max_words`` there
+  is no overlap and chunks are disjoint.
 
-*  Each ``Chunk`` records the *doc_id*, *section_number*, *chunk_index*,
-   *page_range*, and *word_count* for full provenance during retrieval.
+* Each ``Chunk`` records the *doc_id*, *section_number*, *chunk_index*,
+  *page_range*, and *word_count* for full provenance during retrieval.
 
-*  Sections whose total word count fits in a single window produce exactly
-   one ``Chunk`` (no splitting required).
+* Sections whose total word count fits in a single window produce exactly
+  one ``Chunk`` (no splitting required).
 
-*  Page attribution per chunk is approximated: we track which ``Block``
-   each word comes from and report the page range spanned by blocks whose
-   words appear in the window.
+* Page attribution per chunk is approximated: we track which ``Block``
+  each word comes from and report the page range spanned by blocks whose
+  words appear in the window.
+
+* A minimum-chunk-size floor prevents retrieving tiny fragments that
+  hurt BM25 and dense recall (e.g. section headers, page numbers).
 
 Public API
 ----------
@@ -36,11 +39,14 @@ from clausewright.schemas import Block, Chunk, Section
 DEFAULT_MAX_WORDS: Final[int] = 300
 DEFAULT_STRIDE: Final[int] = 150  # 50 % overlap
 
+# Minimum chunk size in words.  Chunks smaller than this are merged with
+# the next window so that every chunk has enough text for reliable
+# sparse and dense retrieval.
+MIN_CHUNK_WORDS: Final[int] = 80
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class _WordSpan:
@@ -92,7 +98,6 @@ def _page_range_for_window(
 # Public API
 # ---------------------------------------------------------------------------
 
-
 def _build_section_breadcrumbs(section: Section, section_map: dict[str, Section]) -> tuple[str, ...]:
     """Walk up parent_number to construct the hierarchical lineage tuple."""
     crumbs: list[str] = []
@@ -114,6 +119,63 @@ def _build_section_breadcrumbs(section: Section, section_map: dict[str, Section]
     return tuple(reversed(crumbs))
 
 
+def _merge_small_chunks(chunks: list[Chunk], min_words: int = MIN_CHUNK_WORDS) -> list[Chunk]:
+    """Merge chunks that are smaller than *min_words* with the next chunk.
+
+    This prevents the retriever from seeing many tiny fragments (e.g. section
+    headers, page-only blocks) that do not contain enough contextual text for
+    BM25 or dense similarity to match well.
+
+    After merging, every chunk has at least *min_words* unless the very last
+    chunk of a document is still smaller (kept as-is).
+    """
+    if not chunks:
+        return []
+
+    merged: list[Chunk] = []
+    cur = chunks[0]
+
+    for next_c in chunks[1:]:
+        if cur.word_count < min_words:
+            # Merge next into cur so cur meets the minimum
+            cur = Chunk(
+                chunk_id=cur.chunk_id,
+                doc_id=cur.doc_id,
+                section_number=cur.section_number,
+                chunk_index=cur.chunk_index,
+                text=cur.text + " " + next_c.text,
+                page_range=cur.page_range,
+                word_count=cur.word_count + next_c.word_count,
+                breadcrumbs=cur.breadcrumbs,
+                contextual_text=cur.contextual_text,
+            )
+        else:
+            merged.append(cur)
+            cur = next_c
+
+    # If the final chunk is still smaller than min_words, try merging it
+    # with the previous chunk in the merged list (if any).
+    if cur.word_count < min_words and merged:
+        prev = merged.pop()
+        combined = Chunk(
+            chunk_id=prev.chunk_id,
+            doc_id=prev.doc_id,
+            section_number=prev.section_number,
+            chunk_index=prev.chunk_index,
+            text=prev.text + " " + cur.text,
+            page_range=prev.page_range,
+            word_count=prev.word_count + cur.word_count,
+            breadcrumbs=prev.breadcrumbs,
+            contextual_text=prev.contextual_text,
+        )
+        merged.append(combined)
+    elif cur.word_count < min_words:
+        # No previous chunk to merge with; keep as-is (very short document)
+        merged.append(cur)
+
+    return merged
+
+
 def chunk_sections(
     doc_id: str,
     sections: list[Section],
@@ -125,15 +187,15 @@ def chunk_sections(
 
     Parameters
     ----------
-    doc_id:
+    doc_id : str
         Identifier of the source document; embedded in each ``Chunk.chunk_id``.
-    sections:
+    sections : list[Section]
         Ordered list of sections as produced by
         :func:`clausewright.ingestion.section_parser.parse_sections`.
-    max_words:
+    max_words : int, default 300
         Maximum number of words per chunk.  Acts as a proxy for token count
         (≈ 0.75 × ``max_words`` tokens for English text).
-    stride:
+    stride : int, default 150
         Number of words to advance the window at each step.  Must be
         ``1 <= stride <= max_words``.  Setting ``stride == max_words``
         produces non-overlapping chunks.
@@ -203,5 +265,8 @@ def chunk_sections(
                 break
 
             window_start += stride
+
+    # Merge chunks that are too small to be useful for retrieval
+    chunks = _merge_small_chunks(chunks, min_words=MIN_CHUNK_WORDS)
 
     return chunks
