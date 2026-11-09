@@ -1,0 +1,46 @@
+name: Retrieval eval
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  retrieval-gate:
+    name: retrieval regression gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Cache CUAD
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: cuad-v1-88b694d9
+
+      - name: Fetch and verify CUAD
+        run: python scripts/fetch_cuad.py
+
+      - name: Compare retrieval against the committed baseline
+        run: |
+          python -m clausewright.eval retrieval \
+            --split dev \
+            --sample 5 \
+            --config bm25,dense \
+            --out data/eval/ci_results.json \
+            --baseline benchmarks/retrieval_baseline.json \
+            --tolerance 0.03
