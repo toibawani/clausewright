@@ -169,8 +169,9 @@ def _merge_small_chunks(chunks: list[Chunk], min_words: int = MIN_CHUNK_WORDS) -
             contextual_text=prev.contextual_text,
         )
         merged.append(combined)
-    elif cur.word_count < min_words:
-        # No previous chunk to merge with; keep as-is (very short document)
+    else:
+        # Either the final chunk already meets the floor (keep it) or there is
+        # no previous chunk to merge a short document into (keep it as-is).
         merged.append(cur)
 
     return merged

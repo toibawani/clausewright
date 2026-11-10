@@ -46,6 +46,11 @@ def _words(n: int, word: str = "word") -> str:
     return " ".join([word] * n)
 
 
+def _seq_words(n: int, prefix: str = "w") -> str:
+    """Return *n* distinct words w0 w1 ... so overlaps can be asserted."""
+    return " ".join(f"{prefix}{i}" for i in range(n))
+
+
 # ---------------------------------------------------------------------------
 # Input validation
 # ---------------------------------------------------------------------------
@@ -68,9 +73,10 @@ def test_stride_exceeds_max_words_raises() -> None:
 
 def test_stride_equal_max_words_is_valid() -> None:
     """stride == max_words means no overlap — should not raise."""
-    sec = _section("1", _block(_words(10)))
-    result = chunk_sections("doc", [sec], max_words=10, stride=10)
+    sec = _section("1", _block(_words(80)))
+    result = chunk_sections("doc", [sec], max_words=80, stride=80)
     assert len(result) == 1
+    assert result[0].word_count == 80
 
 
 # ---------------------------------------------------------------------------
@@ -116,34 +122,39 @@ def test_exact_window_size_produces_single_chunk() -> None:
 
 
 def test_long_section_produces_multiple_chunks() -> None:
-    # 100 words, window=50, stride=50 → 2 non-overlapping chunks
-    sec = _section("3", _block(_words(100)))
-    chunks = chunk_sections("doc", [sec], max_words=50, stride=50)
+    # 160 words, window=80, stride=80 → 2 non-overlapping chunks, both at the floor
+    sec = _section("3", _block(_words(160)))
+    chunks = chunk_sections("doc", [sec], max_words=80, stride=80)
     assert len(chunks) == 2
+    assert [c.word_count for c in chunks] == [80, 80]
 
 
 def test_overlapping_chunks() -> None:
-    # 100 words, window=60, stride=40 → windows at positions 0 and 40
-    # window 0: words [0, 60)  → 60 words
-    # window 1: words [40, 100) → 60 words  (covers remaining 60 words)
-    # After window 1 the end equals total_words so we stop → 2 chunks
-    sec = _section("4", _block(_words(100)))
-    chunks = chunk_sections("doc", [sec], max_words=60, stride=40)
+    # 140 words, window=100, stride=60 → windows at positions 0 and 60
+    # window 0: words [0, 100)  → 100 words
+    # window 1: words [60, 140) → 80 words (both clear the 80-word floor)
+    sec = _section("4", _block(_seq_words(140)))
+    chunks = chunk_sections("doc", [sec], max_words=100, stride=60)
     assert len(chunks) == 2
+    assert [c.word_count for c in chunks] == [100, 80]
+    # The two windows overlap by 40 words: chunk 1 starts at w60.
+    assert chunks[0].text.split()[60] == chunks[1].text.split()[0] == "w60"
 
 
 def test_chunk_indices_are_sequential() -> None:
-    sec = _section("5", _block(_words(90)))
-    chunks = chunk_sections("doc", [sec], max_words=30, stride=30)
+    # 300 words, window=80, stride=80 → 80/80/80/60; the tail merges, leaving 3
+    sec = _section("5", _block(_words(300)))
+    chunks = chunk_sections("doc", [sec], max_words=80, stride=80)
+    assert len(chunks) > 1
     indices = [c.chunk_index for c in chunks]
     assert indices == list(range(len(chunks)))
 
 
 def test_all_words_covered_non_overlapping() -> None:
     """With stride == max_words, the union of chunk words equals the section text."""
-    text = _words(75, word="tok")
+    text = _words(320, word="tok")
     sec = _section("6", _block(text))
-    chunks = chunk_sections("doc", [sec], max_words=25, stride=25)
+    chunks = chunk_sections("doc", [sec], max_words=80, stride=80)
     reconstructed = " ".join(c.text for c in chunks)
     assert reconstructed == text
 
@@ -154,17 +165,19 @@ def test_all_words_covered_non_overlapping() -> None:
 
 
 def test_word_count_matches_text() -> None:
-    sec = _section("7", _block(_words(40)))
-    chunks = chunk_sections("doc", [sec], max_words=40, stride=20)
+    sec = _section("7", _block(_words(160)))
+    chunks = chunk_sections("doc", [sec], max_words=80, stride=80)
     for chunk in chunks:
         assert chunk.word_count == len(chunk.text.split())
 
 
-def test_last_chunk_may_be_smaller() -> None:
-    # 70 words, window 50, stride 50 → chunk 0: 50 words, chunk 1: 20 words
-    sec = _section("8", _block(_words(70)))
-    chunks = chunk_sections("doc", [sec], max_words=50, stride=50)
-    assert chunks[-1].word_count == 20
+def test_trailing_small_chunk_is_merged_into_previous() -> None:
+    # 230 words, window 100, stride 100 → 100, 100, 30; the 30-word tail is
+    # below the floor and is folded into the previous chunk instead of kept.
+    sec = _section("8", _block(_words(230)))
+    chunks = chunk_sections("doc", [sec], max_words=100, stride=100)
+    assert len(chunks) == 2
+    assert chunks[-1].word_count == 130
 
 
 # ---------------------------------------------------------------------------
@@ -179,8 +192,8 @@ def test_chunk_id_format() -> None:
 
 
 def test_chunk_id_unique_across_sections() -> None:
-    s1 = _section("1", _block(_words(10)))
-    s2 = _section("2", _block(_words(10)))
+    s1 = _section("1", _block(_words(100)))
+    s2 = _section("2", _block(_words(100)))
     chunks = chunk_sections("doc", [s1, s2], max_words=100, stride=50)
     ids = [c.chunk_id for c in chunks]
     assert len(ids) == len(set(ids))
@@ -210,15 +223,15 @@ def test_multi_page_block_range() -> None:
 
 
 def test_page_range_first_chunk_vs_second() -> None:
-    """When blocks split across pages, first chunk should be page 1 only."""
-    # 60 words on page 1, 60 words on page 2 → window=60, stride=60 → 2 chunks
+    """When blocks split across pages, the two windows report their own pages."""
+    # 80 words on page 1, 80 words on page 2 → window=80, stride=80 → 2 chunks
     sec = _section(
         "1",
-        _block(_words(60), page=1),
-        _block(_words(60), page=2),
+        _block(_words(80), page=1),
+        _block(_words(80), page=2),
         page_range=(1, 2),
     )
-    chunks = chunk_sections("doc", [sec], max_words=60, stride=60)
+    chunks = chunk_sections("doc", [sec], max_words=80, stride=80)
     assert len(chunks) == 2
     assert chunks[0].page_range == (1, 1)
     assert chunks[1].page_range == (2, 2)
@@ -230,9 +243,9 @@ def test_page_range_first_chunk_vs_second() -> None:
 
 
 def test_multiple_sections_ordering() -> None:
-    s1 = _section("1", _block(_words(10)))
-    s2 = _section("2", _block(_words(10)))
-    s3 = _section("3", _block(_words(10)))
+    s1 = _section("1", _block(_words(100)))
+    s2 = _section("2", _block(_words(100)))
+    s3 = _section("3", _block(_words(100)))
     chunks = chunk_sections("doc", [s1, s2, s3], max_words=100, stride=50)
     sec_nums = [c.section_number for c in chunks]
     assert sec_nums == ["1", "2", "3"]
@@ -247,6 +260,60 @@ def test_returns_list_of_chunk_instances() -> None:
 # ---------------------------------------------------------------------------
 # Return type immutability (frozen model)
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Regression: merging small chunks must not drop the final chunk
+# ---------------------------------------------------------------------------
+
+
+def test_merge_small_chunks_keeps_final_chunk() -> None:
+    """Both chunks already meet the floor, so merging must return both."""
+    from clausewright.ingestion.chunker import _merge_small_chunks
+
+    chunks = [
+        Chunk(
+            chunk_id="d-1-0",
+            doc_id="d",
+            section_number="1",
+            chunk_index=0,
+            text=_words(80),
+            page_range=(1, 1),
+            word_count=80,
+        ),
+        Chunk(
+            chunk_id="d-1-1",
+            doc_id="d",
+            section_number="1",
+            chunk_index=1,
+            text=_words(80, word="tail"),
+            page_range=(1, 1),
+            word_count=80,
+        ),
+    ]
+
+    merged = _merge_small_chunks(chunks, min_words=80)
+
+    assert len(merged) == 2
+    assert merged[-1].word_count == 80
+    assert merged[-1].text.split()[0] == "tail"
+
+
+def test_final_merged_window_is_not_dropped() -> None:
+    """A merged final window of >= MIN_CHUNK_WORDS must be returned, not lost."""
+    sec = _section("1", _block(_words(100)))
+    chunks = chunk_sections("doc", [sec], max_words=50, stride=50)
+    assert len(chunks) == 1
+    assert chunks[0].word_count == 100
+
+
+def test_trailing_small_chunk_merges_without_duplicating() -> None:
+    """A short trailing window is folded into the previous one exactly once."""
+    sec = _section("1", _block(_words(230, word="tok")))
+    chunks = chunk_sections("doc", [sec], max_words=100, stride=100)
+    assert len(chunks) == 2
+    assert chunks[-1].word_count == 130
+    assert " ".join(c.text for c in chunks).split() == ["tok"] * 230
 
 
 def test_chunk_is_frozen() -> None:
