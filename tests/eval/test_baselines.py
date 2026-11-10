@@ -33,11 +33,13 @@ class TestFixedWindowChunks:
         assert out[-1].text.endswith("w399")
 
     def test_spans_sections_and_pages(self) -> None:
+        # 60 words on page 1 and 100 on page 2 with 80-word windows: the first
+        # window spans pages 1-2, the second sits on page 2. Both clear the floor.
         doc = _doc(
             [" ".join(f"a{i}" for i in range(60))],
-            [" ".join(f"b{i}" for i in range(60))],
+            [" ".join(f"b{i}" for i in range(100))],
         )
-        out = fixed_window_chunks("d", doc, max_words=100, stride=100)
+        out = fixed_window_chunks("d", doc, max_words=80, stride=80)
         assert len(out) == 2
         assert out[0].page_range == (1, 2)
         assert out[1].page_range == (2, 2)
