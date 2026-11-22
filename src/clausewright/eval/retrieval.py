@@ -39,7 +39,7 @@ CONFIGS = ("bm25", "dense", "hybrid", "hybrid_rerank", "fixed_window")
 
 #: Chunkings the product retriever can be built from. ``fixed_window`` is the
 #: baseline config and ignores this choice on purpose.
-CHUNKINGS = ("struct", "struct_packed_300", "struct_packed_400")
+CHUNKINGS = ("struct", "struct_packed_300", "struct_packed_400", "win500")
 
 
 @dataclass(frozen=True)
@@ -68,6 +68,9 @@ def _build_indexes_for_contract(
         struct_chunks = pack_sections(
             doc_id, sections, max_words=int(chunking.rsplit("_", 1)[-1])
         )
+    elif chunking.startswith("win"):
+        size = int(chunking[3:])
+        struct_chunks = fixed_window_chunks(doc_id, doc, max_words=size, stride=size // 2)
     else:
         raise ValueError(f"unknown chunking: {chunking}")
     struct_retriever = HybridRetriever.from_chunks(struct_chunks, embedder=embedder)

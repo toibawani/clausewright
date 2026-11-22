@@ -241,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
         "--chunking",
         type=str,
         default="struct",
-        choices=["struct", "struct_packed_300", "struct_packed_400"],
+        choices=["struct", "struct_packed_300", "struct_packed_400", "win500"],
         help="Product chunking the non-baseline configs are built from",
     )
     ret_parser.add_argument("--out", type=str, default=None)
