@@ -40,7 +40,8 @@ jobs:
           python -m clausewright.eval retrieval \
             --split dev \
             --sample 5 \
-            --config bm25,dense \
+            --chunking win500 \
+            --config hybrid_rerank \
             --out data/eval/ci_results.json \
             --baseline benchmarks/retrieval_baseline.json \
             --tolerance 0.03
