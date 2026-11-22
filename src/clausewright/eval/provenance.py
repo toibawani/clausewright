@@ -47,7 +47,8 @@ def git_branch() -> str:
 
 
 def git_commit(full: bool = True) -> str:
-    return _git("rev-parse", "HEAD" if full else "--short", "HEAD") or "unknown"
+    args = ("rev-parse", "HEAD") if full else ("rev-parse", "--short", "HEAD")
+    return _git(*args) or "unknown"
 
 
 def git_status_lines() -> list[str]:
