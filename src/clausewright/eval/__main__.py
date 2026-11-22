@@ -90,6 +90,7 @@ def _cmd_retrieval(args: argparse.Namespace) -> int:
         split=args.split,
         configs=configs_to_run,
         sample_contracts=args.sample,
+        chunking=args.chunking,
     )
     print(f"saved retrieval results: {out_path}")
 
@@ -236,6 +237,13 @@ def main(argv: list[str] | None = None) -> int:
     ret_parser.add_argument("--config", type=str, default="all")
     ret_parser.add_argument("--split", type=str, default="dev", choices=["dev", "test"])
     ret_parser.add_argument("--sample", type=int, default=None)
+    ret_parser.add_argument(
+        "--chunking",
+        type=str,
+        default="struct",
+        choices=["struct", "struct_packed_300", "struct_packed_400"],
+        help="Product chunking the non-baseline configs are built from",
+    )
     ret_parser.add_argument("--out", type=str, default=None)
     ret_parser.add_argument(
         "--baseline",

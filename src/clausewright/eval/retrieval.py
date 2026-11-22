@@ -29,12 +29,17 @@ from clausewright.eval.metrics import (
     recall_at_k,
 )
 from clausewright.ingestion import chunk_sections, load_pdf, parse_sections
+from clausewright.ingestion.packed_chunker import pack_sections
 from clausewright.retrieval.embedder import Embedder
 from clausewright.retrieval.hybrid_search import HybridRetriever
 from clausewright.retrieval.reranker import CrossEncoderReranker
 from clausewright.schemas import Chunk, ParsedDocument
 
 CONFIGS = ("bm25", "dense", "hybrid", "hybrid_rerank", "fixed_window")
+
+#: Chunkings the product retriever can be built from. ``fixed_window`` is the
+#: baseline config and ignores this choice on purpose.
+CHUNKINGS = ("struct", "struct_packed_300", "struct_packed_400")
 
 
 @dataclass(frozen=True)
@@ -52,11 +57,19 @@ def _build_indexes_for_contract(
     doc: ParsedDocument,
     doc_id: str,
     embedder: Embedder,
+    chunking: str = "struct",
 ) -> tuple[HybridRetriever, HybridRetriever]:
-    """Build structure-aware and fixed-window retrievers for a document."""
-    # 1. Structure-aware chunks
+    """Build the product retriever (for *chunking*) and the fixed-window baseline."""
+    # 1. Product chunks
     sections = parse_sections(doc)
-    struct_chunks = chunk_sections(doc_id, sections)
+    if chunking == "struct":
+        struct_chunks = chunk_sections(doc_id, sections)
+    elif chunking.startswith("struct_packed_"):
+        struct_chunks = pack_sections(
+            doc_id, sections, max_words=int(chunking.rsplit("_", 1)[-1])
+        )
+    else:
+        raise ValueError(f"unknown chunking: {chunking}")
     struct_retriever = HybridRetriever.from_chunks(struct_chunks, embedder=embedder)
 
     # 2. Fixed-window baseline chunks
@@ -71,6 +84,7 @@ def evaluate_retrieval(
     split: str = "dev",
     configs: tuple[str, ...] = CONFIGS,
     sample_contracts: int | None = None,
+    chunking: str = "struct",
 ) -> dict[str, Any]:
     """Run retrieval evaluation across configurations on the given split."""
     items = [i for i in eval_set.by_split(split) if i.is_answerable]  # type: ignore[arg-type]
@@ -108,7 +122,9 @@ def evaluate_retrieval(
         print(f"[{c_idx}/{len(contract_titles)}] Indexing {title}...")
 
         doc = load_pdf(pdf_path, doc_id=title)
-        struct_retriever, window_retriever = _build_indexes_for_contract(doc, title, embedder)
+        struct_retriever, window_retriever = _build_indexes_for_contract(
+            doc, title, embedder, chunking=chunking
+        )
 
         for item in contract_items:
             golds = item.gold_texts
@@ -179,6 +195,7 @@ def evaluate_retrieval(
     report = {
         "timestamp": datetime.now(UTC).isoformat(),
         "split": split,
+        "chunking": chunking,
         "span_overlap_threshold": SPAN_OVERLAP_THRESHOLD,
         "n_contracts_evaluated": len(contract_titles),
         "n_queries_evaluated": sum(len(contracts[t]) for t in contract_titles),
@@ -229,6 +246,7 @@ def run_and_save_retrieval_eval(
     split: str = "dev",
     configs: tuple[str, ...] = CONFIGS,
     sample_contracts: int | None = None,
+    chunking: str = "struct",
 ) -> Path:
     out = output_path or (PATHS.root / "data" / "eval" / "retrieval_results.json")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -239,6 +257,7 @@ def run_and_save_retrieval_eval(
         split=split,
         configs=configs,
         sample_contracts=sample_contracts,
+        chunking=chunking,
     )
     out.write_text(json.dumps(results, indent=2), encoding="utf-8")
     return out
