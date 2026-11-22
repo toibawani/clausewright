@@ -267,3 +267,116 @@ python -m clausewright.eval retrieval --split dev
 scripts/run_dev_eval.py                        # per-config JSON in results/
 scripts/factorial_eval.py --split dev          # chunking x retriever factorial
 ```
+
+## Part B: packed chunkers, the selection rule, and the new baseline
+
+Run: `scripts/factorial_eval.py --split dev --dump-per-query`, n = 180 answerable
+dev queries over 20 contracts, seed 20261018, 10,000 bootstrap resamples by
+contract. Result file: `data/eval/factorial-dev-v2.json` (gitignored; it names
+contracts).
+
+### Chunk shapes
+
+| chunking | chunks | mean words | median | p90 | max |
+|---|---:|---:|---:|---:|---:|
+| struct | 872 | 202.7 | 195.5 | 300 | 370 |
+| struct_packed_300 | 1143 | 162.8 | 187.0 | 300 | 300 |
+| struct_packed_400 | 978 | 177.4 | 164.5 | 400 | 400 |
+| win150 | 1839 | 149.8 | 150.0 | 150 | 226 |
+| win200 | 1379 | 199.2 | 200.0 | 200 | 200 |
+| win300 | 915 | 298.5 | 300.0 | 300 | 300 |
+| win400 | 685 | 396.8 | 400.0 | 400 | 400 |
+| win500 | 545 | 495.6 | 500.0 | 500 | 500 |
+
+### Retrieval, all eight chunkings by four retrievers
+
+| config | R@1 | R@5 | R@10 | MRR | R@1500w | n |
+|---|---:|---:|---:|---:|---:|---:|
+| struct:bm25 | 0.5067 | 0.7965 | 0.8594 | 0.6748 | 0.8353 | 180 |
+| struct:dense | 0.5106 | 0.7433 | 0.8433 | 0.6519 | 0.8116 | 180 |
+| struct:hybrid | 0.5604 | 0.7905 | 0.8760 | 0.6871 | 0.8093 | 180 |
+| struct:hybrid_rerank | 0.6302 | 0.8350 | 0.9117 | 0.7518 | 0.8704 | 180 |
+| struct_packed_300:bm25 | 0.5292 | 0.8177 | 0.8645 | 0.7091 | 0.8465 | 180 |
+| struct_packed_300:dense | 0.4973 | 0.7253 | 0.8385 | 0.6352 | 0.8111 | 180 |
+| struct_packed_300:hybrid | 0.5220 | 0.7774 | 0.8706 | 0.6764 | 0.7984 | 180 |
+| struct_packed_300:hybrid_rerank | 0.5674 | 0.8375 | 0.8903 | 0.7134 | 0.8734 | 180 |
+| struct_packed_400:bm25 | 0.6040 | 0.8557 | 0.8981 | 0.7573 | 0.8420 | 180 |
+| struct_packed_400:dense | 0.5381 | 0.7677 | 0.8688 | 0.6696 | 0.8327 | 180 |
+| struct_packed_400:hybrid | 0.5850 | 0.8385 | 0.8833 | 0.7185 | 0.8399 | 180 |
+| struct_packed_400:hybrid_rerank | 0.6049 | 0.8571 | 0.9046 | 0.7409 | 0.8792 | 180 |
+| win150:bm25 | 0.3839 | 0.6891 | 0.7762 | 0.5610 | 0.7762 | 180 |
+| win150:dense | 0.4606 | 0.7118 | 0.8123 | 0.6115 | 0.8123 | 180 |
+| win150:hybrid | 0.5379 | 0.7179 | 0.7943 | 0.6556 | 0.7943 | 180 |
+| win150:hybrid_rerank | 0.5331 | 0.7379 | 0.8181 | 0.6707 | 0.8181 | 180 |
+| win200:bm25 | 0.4845 | 0.8031 | 0.8438 | 0.6684 | 0.8192 | 180 |
+| win200:dense | 0.5060 | 0.7579 | 0.8316 | 0.6594 | 0.8045 | 180 |
+| win200:hybrid | 0.5984 | 0.7780 | 0.8375 | 0.7154 | 0.7986 | 180 |
+| win200:hybrid_rerank | 0.5712 | 0.8320 | 0.8528 | 0.7150 | 0.8450 | 180 |
+| win300:bm25 | 0.6214 | 0.8559 | 0.8907 | 0.7614 | 0.8559 | 180 |
+| win300:dense | 0.6275 | 0.8133 | 0.8732 | 0.7433 | 0.8133 | 180 |
+| win300:hybrid | 0.6759 | 0.8407 | 0.8722 | 0.7651 | 0.8407 | 180 |
+| win300:hybrid_rerank | 0.6716 | 0.8785 | 0.9065 | 0.7994 | 0.8785 | 180 |
+| win400:bm25 | 0.7190 | 0.8787 | 0.9148 | 0.8072 | 0.8316 | 180 |
+| win400:dense | 0.6323 | 0.8438 | 0.9028 | 0.7492 | 0.8080 | 180 |
+| win400:hybrid | 0.6987 | 0.8676 | 0.8889 | 0.7866 | 0.8264 | 180 |
+| win400:hybrid_rerank | 0.7400 | 0.8880 | 0.9315 | 0.8338 | 0.8815 | 180 |
+| win500:bm25 | 0.7495 | 0.8944 | 0.9167 | 0.8241 | 0.8597 | 180 |
+| win500:dense | 0.6918 | 0.8671 | 0.9111 | 0.7888 | 0.8336 | 180 |
+| win500:hybrid | 0.7643 | 0.8778 | 0.9222 | 0.8284 | 0.8616 | 180 |
+| win500:hybrid_rerank | 0.8130 | 0.9259 | 0.9528 | 0.8745 | 0.8935 | 180 |
+
+All 180 queries are answerable dev items; absent-clause items carry no gold
+span and are excluded from retrieval metrics.
+
+### Structure against matched-size windows (paired, by contract)
+
+| comparison | metric | difference | 95% CI | verdict |
+|---|---|---:|---|---|
+| struct - win300 | R@5 | -0.0435 | [-0.0865, -0.0014] | excludes 0 |
+| struct - win300 | R@1 | -0.0414 | [-0.1092, +0.0313] | includes 0 |
+| struct_packed_300 - win300 | R@5 | -0.0410 | [-0.1076, +0.0135] | includes 0 |
+| struct_packed_400 - win300 | R@5 | -0.0214 | [-0.0739, +0.0230] | includes 0 |
+| win150 - win300 | R@5 | -0.1406 | [-0.1798, -0.0964] | excludes 0 |
+| win200 - win300 | R@5 | -0.0465 | [-0.0755, -0.0168] | excludes 0 |
+
+Structure-aware chunking does not beat matched-size fixed windows on retrieval.
+Neither packed variant recovers that gap; `struct_packed_400` is the closest
+(-0.0214 on R@5, interval includes zero) and is still behind `win400`
+(-0.0380 [-0.0684, -0.0118]) and `win500`.
+
+### The default-selection rule and what it chose
+
+Rule (written into `docs/experiments.md` before this run, E-007): among
+chunkings, take the smallest word budget whose paired R@5 difference against
+the best has a 95 percent interval including zero for `hybrid_rerank`; if a
+structure-respecting variant qualifies, prefer it.
+
+`scripts/select_default.py --report data/eval/factorial-dev-v2.json`:
+
+| chunking | words | structure | R@5 | diff vs best | 95% CI | eligible |
+|---|---:|---|---:|---:|---|---|
+| win150 | 150 | no | 0.7379 | -0.1880 | [-0.2408, -0.1346] | no |
+| win200 | 200 | no | 0.8320 | -0.0939 | [-0.1403, -0.0532] | no |
+| struct | 300 | yes | 0.8350 | -0.0909 | [-0.1328, -0.0504] | no |
+| struct_packed_300 | 300 | yes | 0.8375 | -0.0884 | [-0.1637, -0.0269] | no |
+| win300 | 300 | no | 0.8785 | -0.0474 | [-0.0749, -0.0223] | no |
+| struct_packed_400 | 400 | yes | 0.8571 | -0.0688 | [-0.1291, -0.0175] | no |
+| win400 | 400 | no | 0.8880 | -0.0380 | [-0.0684, -0.0118] | no |
+| win500 | 500 | no | 0.9259 | +0.0000 | [+0.0000, +0.0000] | yes |
+
+**Chosen: win500 with hybrid_rerank.** No smaller budget is statistically
+indistinguishable from the best, and no structure-respecting variant is
+eligible, so the rule selects the best cell itself. This is the rule working as
+written, not a preference: the packed chunkers were the fair chance for
+structure, and they lost.
+
+### Frozen baseline
+
+`benchmarks/retrieval_baseline.json` now records win500 + hybrid_rerank on the
+gate sample (first 5 dev contracts, 35 queries): R@1 0.9143, R@3 0.9714,
+R@5 0.9714, R@10 1.0000, MRR 0.9457. Tolerance stays 0.03.
+
+The previous baseline (bm25 and dense over struct chunks) no longer applies for
+two reasons: the gated configuration changed, and the chunk-id fix removed
+duplicate ids that let fusion collapse distinct chunks, which changes every
+fused ranking computed before it.
