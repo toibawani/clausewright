@@ -100,6 +100,18 @@ def _reciprocal_rank_fusion(
     return scores
 
 
+def _fused_order(scores: dict[str, float]) -> list[str]:
+    """Order fused ids by descending score, breaking ties by chunk id.
+
+    RRF scores tie often: one document per channel at the same rank produces
+    identical 1/(k+rank) contributions. Sorting a dict by value alone resolves
+    those ties by insertion order, so the fused list silently depends on which
+    channel was listed first. Fusion is symmetric in its inputs, so the output
+    must be too; ties fall back to the chunk id, which is stable.
+    """
+    return sorted(scores, key=lambda cid: (-scores[cid], cid))
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -254,8 +266,9 @@ class HybridRetriever:
 
         rrf_scores = _reciprocal_rank_fusion([dense_ids, sparse_ids], rrf_k=self.rrf_k)
 
-        # Sort by descending RRF score and resolve back to Chunk objects
-        sorted_ids = sorted(rrf_scores, key=lambda cid: rrf_scores[cid], reverse=True)
+        # Sort by descending RRF score, ties broken by id, and resolve back to
+        # Chunk objects.
+        sorted_ids = _fused_order(rrf_scores)
         effective_top_k = min(top_k, len(sorted_ids))
 
         results: list[tuple[Chunk, float]] = []
