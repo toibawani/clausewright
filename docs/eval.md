@@ -150,6 +150,46 @@ Three things follow, and none of them flatters the design:
 - The best cell in the table is `win400:hybrid_rerank` at R@1 0.7400. The
   product chunker's best cell is 0.6209.
 
+## Post-fix structure rerun (2026-11-22)
+
+The factorial above was run before the duplicate-chunk-id fix (E-005). That bug
+only affected configurations that resolve results through the retriever's
+id-keyed map, which is why `bm25` and `dense` did not move while `hybrid` did.
+The table below reruns the `struct` chunking after the fix; the `winN` rows are
+unaffected because fixed windows never produce duplicate ids.
+
+| Config | R@1 | R@5 | R@10 | MRR | R@1500w | R@3000w |
+|--------|-----|-----|------|-----|---------|---------|
+| struct:bm25 | 0.5067 | 0.7965 | 0.8594 | 0.6748 | 0.8353 | 0.8594 |
+| struct:dense | 0.5106 | 0.7433 | 0.8433 | 0.6519 | 0.8116 | 0.8433 |
+| struct:hybrid | 0.5604 | 0.7905 | 0.8760 | 0.6871 | 0.8093 | 0.8760 |
+| struct:hybrid_rerank | 0.6302 | 0.8350 | 0.9117 | 0.7518 | 0.8704 | 0.9062 |
+
+What changed, paired by contract:
+
+| Comparison | Metric | Difference | 95% CI |
+|------------|--------|-----------|--------|
+| struct:hybrid, post − pre fix | R@1 | +0.1343 | [+0.0381, +0.2439] |
+| struct:hybrid, post − pre fix | R@5 | +0.0446 | [+0.0113, +0.0833] |
+| struct:hybrid, post − pre fix | MRR | +0.0830 | [+0.0135, +0.1644] |
+| struct:hybrid_rerank, post − pre fix | R@1 | +0.0093 | [+0.0000, +0.0238] |
+| struct:hybrid − struct:bm25 (post fix) | R@1 | +0.0537 | [-0.0297, +0.1411] |
+| struct:hybrid − struct:bm25 (post fix) | R@5 | -0.0059 | [-0.0471, +0.0359] |
+| struct:hybrid − fixed_window (post fix) | R@1 | -0.1177 | [-0.1952, -0.0430] |
+| struct:hybrid_rerank − fixed_window (post fix) | R@1 | -0.0479 | [-0.1148, +0.0172] |
+| struct:hybrid_rerank − fixed_window (post fix) | R@5 | -0.0057 | [-0.0592, +0.0463] |
+
+Three conclusions replace the earlier ones:
+
+- **Hybrid is not worse than BM25.** The earlier five-point R@1 deficit was the
+  duplicate-id bug. After the fix the difference is +0.0537 with an interval
+  that includes zero: the two are indistinguishable at this sample size.
+- **Structure still loses to fixed 300-word windows without reranking**
+  (-0.1177 R@1, CI [-0.1952, -0.0430]).
+- **With reranking, the two are statistically tied** (R@1 -0.0479, CI includes
+  zero). The reranker recovers what the section-first chunking costs, and the
+  case for structure now rests on citation granularity, not recall.
+
 ## P1 baseline (historical, `9ef612c`)
 
 Kept because it is the number the original docs quoted. It predates the chunker
@@ -183,9 +223,10 @@ and not used for tuning. Kept for the record; the split is seen.
    ([-0.1693, -0.0603]) and -0.2498 for hybrid ([-0.3489, -0.1636]). Equalizing
    the retrieved budget turns the bm25 and dense losses into noise but leaves
    the hybrid loss standing (-0.0542, [-0.0913, -0.0178]).
-2. **Equal-weight RRF fusion is worse than BM25 alone** on dev at R@1 and R@5
-   (0.4261 / 0.7459 versus 0.5067 / 0.7965). The reranker repairs most of it
-   (R@5 0.8216) but does not beat fixed windows.
+2. **Equal-weight RRF fusion is not worse than BM25 alone** once the
+   duplicate-id bug is fixed: hybrid R@1 is 0.5604 against 0.5067 for bm25, a
+   difference whose interval includes zero. The pre-fix table in the factorial
+   section shows the 0.4261 that made fusion look broken.
 3. **The chunker fix mattered more than the section prior.** Restoring the
    final short chunk moved structure-aware BM25 R@1 from 0.4357 to 0.5067
    (+0.0709, CI [+0.0100, +0.1423]) while fixed windows did not move.

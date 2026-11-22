@@ -112,11 +112,10 @@ symmetric in its inputs; the output must be too.
 channel order leaves the fused list unchanged, and a strictly higher score
 still outranks a smaller id.
 
-**Numbers.** No aggregate number yet. The tie case is rare at the top of the
-list, and claiming a recall change without measuring it would be exactly the
-kind of fake number this project forbids. The factorial run records the
-post-fix numbers; if they differ from `E-002`, the difference is attributable
-to this fix plus nothing else.
+**Numbers.** The tie-break change was bundled with the duplicate-id fix in
+`E-005`, so its own aggregate effect is not isolated. The tie case is rare at
+the top of the list, and claiming a recall change without measuring it would be
+exactly the kind of fake number this project forbids.
 
 **Decision.** Keep. It is a determinism and correctness fix regardless of
 aggregate effect.
@@ -165,3 +164,88 @@ granularity they cost.
 **What surprised us.** The section prior is not neutral. It is actively
 harmful for recall, and more so for the fused retriever than for either channel
 alone.
+
+**Superseded in part.** The `hybrid` and `hybrid_rerank` rows here predate the
+duplicate-id fix in `E-005`. After the fix, `struct:hybrid` reaches R@1 0.5604
+and `struct:hybrid_rerank` 0.6302. The `bm25`, `dense`, and `winN` rows are
+unaffected, because those paths never resolve results through the id map. See
+`docs/eval.md` for the post-fix table and intervals.
+
+---
+
+## E-005 — Duplicate chunk ids made fused results unreachable
+
+**Date:** 2026-11-22
+**Branch:** `feature/121-fusion-diagnosis`
+**Status:** fixed; supersedes the fusion conclusion in E-002/E-004
+
+**Hypothesis under test.** Hybrid loses to BM25 because equal-weight RRF
+discards BM25's score magnitude and lets a weak dense channel outvote it.
+
+**What the diagnosis actually found.** One case was logically impossible: the
+gold chunk at BM25 rank 1 and dense rank 2, yet absent from the fused list. A
+chunk ranked first by one channel and second by the other cannot fall out of a
+100-candidate fusion. Instrumenting the contract showed 19 chunks with only 13
+unique `chunk_id` values. `parse_sections` emits repeated section numbers
+(two sections both numbered "1"), and the id format is `doc-section-window`, so
+those chunks collided. `HybridRetriever._chunk_map` keeps one chunk per id and
+RRF deduplicates by id, so the shadowed chunk became unreachable through the
+fused path even while `search_sparse` returned it first. `bm25` and `dense`
+return chunk objects directly and were unaffected.
+
+**Change.** `_ensure_unique_chunk_ids` gives later occurrences a deterministic
+suffix (`doc-1-0-1`). Unit test: two sections numbered "1" yield unique ids and
+the documented format. The same commit adds the RRF tie-break from `E-003`.
+
+**Dev numbers** (180 answerable queries), paired by contract:
+
+| Comparison | Metric | Difference | 95% CI |
+|------------|--------|-----------|--------|
+| struct:hybrid, post − pre fix | R@1 | +0.1343 | [+0.0381, +0.2439] |
+| struct:hybrid, post − pre fix | R@5 | +0.0446 | [+0.0113, +0.0833] |
+| struct:hybrid, post − pre fix | MRR | +0.0830 | [+0.0135, +0.1644] |
+| struct:hybrid_rerank, post − pre fix | R@1 | +0.0093 | [+0.0000, +0.0238] |
+| struct:hybrid − struct:bm25, post fix | R@1 | +0.0537 | [-0.0297, +0.1411] |
+
+**Decision.** Keep. Two conclusions change: fusion is not worse than BM25
+(the deficit was the bug), and the original magnitude hypothesis was never
+confirmed. The RRF sweep in the same run (depth 20 and k=10 scoring 0.5194 R@1
+against 0.4261 at k=60/depth 50) is **pre-fix and therefore not actionable**; it
+must be rerun before anything is chosen from it.
+
+**What surprised us.** A silent id collision cost 13 R@1 points and produced a
+confident, wrong conclusion about the fusion algorithm.
+
+---
+
+## E-006 — Where the date-category misses actually come from
+
+**Date:** 2026-11-22
+**Script:** `scripts/classify_date_misses.py --split dev`
+**Status:** measured; follow-ups in #122, related to #115
+
+**Hypothesis.** Date questions fail because PDF extraction drops the date, or
+because it lands in a chunk the retriever never sees.
+
+**Method.** For every dev Agreement Date and Effective Date query with no hit
+in the top 10, check three things in order: is the gold token run present in
+the parsed document at all (extraction), is it present in any chunk
+(chunk assignment), is it present in a chunk but outside the top 10 (ranking).
+The script prints only counts, section numbers, and booleans, never contract
+text.
+
+**Result.** 19 misses: **17 ranking, 2 extraction, 0 chunk-assignment.** In both
+extraction cases the lost span was six tokens long. The ranking cases have
+gold spans of three to five tokens (a date) sitting inside real chunks that the
+query did not surface: the retrieved top three sections are plausible contract
+sections, just not the one holding the date.
+
+**Decision.** Extraction is not the main story and chunk assignment is not a
+problem at all. The dominant failure is ranking for questions with almost no
+lexical signal ("Highlight the parts ... Agreement Date"), which points at
+query-side category expansion rather than at the parser. Follow-up issues:
+extraction for the two lost spans, and a category-aware query expansion
+experiment, both under #122.
+
+**What surprised us.** The existing docs blamed PDF extraction for date
+failures. On dev that accounts for two of nineteen.
