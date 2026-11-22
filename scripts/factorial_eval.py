@@ -254,6 +254,7 @@ def run_factorial(
     chunkings: tuple[str, ...],
     retrievers: tuple[str, ...],
     sample_contracts: int | None,
+    dump_per_query: bool = False,
 ) -> dict[str, Any]:
     """Run the factorial and return a JSON-serialisable report."""
     started = time.time()
@@ -346,6 +347,23 @@ def run_factorial(
         "comparisons": [c.as_dict() for c in comparisons],
         "elapsed_seconds": round(time.time() - started, 1),
     }
+    if dump_per_query:
+        report["per_query"] = {
+            f"{chunking}:{name}": [
+                {
+                    "item_id": s.item_id,
+                    "contract": s.contract,
+                    "recall_at_1": s.recall_at_1,
+                    "recall_at_5": s.recall_at_5,
+                    "recall_at_10": s.recall_at_10,
+                    "mrr": s.mrr,
+                    "recall_at_1500w": s.recall_at_1500w,
+                }
+                for s in cells[(chunking, name)]
+            ]
+            for chunking in chunkings
+            for name in retrievers
+        }
     return report
 
 
@@ -407,6 +425,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--out", default="data/eval/factorial.json", help="JSON output path"
     )
+    parser.add_argument(
+        "--dump-per-query",
+        action="store_true",
+        help="include per-query scores so intervals can be recomputed later",
+    )
     args = parser.parse_args(argv)
 
     chunkings = tuple(c.strip() for c in args.chunkings.split(",") if c.strip())
@@ -423,6 +446,7 @@ def main(argv: list[str] | None = None) -> int:
         chunkings=chunkings,
         retrievers=retrievers,
         sample_contracts=args.sample,
+        dump_per_query=args.dump_per_query,
     )
     print_report(report)
 
