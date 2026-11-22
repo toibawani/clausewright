@@ -57,7 +57,13 @@ RETRIEVERS: tuple[str, ...] = ("hybrid", "hybrid_rerank")
 DEFAULT_RRF_K = 60
 DEFAULT_DEPTH = 50
 
-RERANK_CANDIDATES = 25
+#: Rerank depth per cell. The product reranks 25 candidates; the sweep uses 10
+#: because twelve fusion cells per query would otherwise cost 2.5x for a knob
+#: whose effect is already being measured. Every cell is scored the same way,
+#: including the default cell it is compared against, so the cells stay
+#: comparable to each other even though their absolute level sits below the
+#: product path.
+RERANK_CANDIDATES = 10
 SEED = CUAD_SMALL.seed
 
 
