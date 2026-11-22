@@ -358,6 +358,7 @@ def run_factorial(
                     "recall_at_10": s.recall_at_10,
                     "mrr": s.mrr,
                     "recall_at_1500w": s.recall_at_1500w,
+                    "recall_at_3000w": s.recall_at_3000w,
                 }
                 for s in cells[(chunking, name)]
             ]

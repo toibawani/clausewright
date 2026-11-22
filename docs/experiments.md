@@ -249,3 +249,31 @@ experiment, both under #122.
 
 **What surprised us.** The existing docs blamed PDF extraction for date
 failures. On dev that accounts for two of nineteen.
+
+## E-008: selection rule amended to equal-budget recall (2026-11-22)
+
+**What changed and why.** The selection rule in E-007 used paired R@5. That
+metric rewards bigger windows mechanically: five 500-word chunks put far more
+text in front of the reader than five 200-word chunks, so a large-window
+configuration can win R@5 without retrieving the right clause any better. Using
+it to pick the default would have selected the largest window for the wrong
+reason.
+
+**Amended rule.** Primary metric: recall at an equal retrieved budget of 1500
+words. Secondary: recall at 3000 words. Once B4 exists, localized-span hit rate
+and character precision join at the same budget. The mechanics are unchanged:
+the smallest chunk-size configuration whose paired difference against the best
+has a 95 percent interval including zero for `hybrid_rerank`, preferring a
+structure-respecting variant when one qualifies.
+
+**Status: exploratory.** The rule was amended after results had been seen, so
+the choice it produces is not confirmatory. The final default will be confirmed
+once on a source that has not been used for tuning: LegalBench-RAG, or a
+contract-disjoint split of CUAD.
+
+**Consequence for B6.** The baseline freeze for the R@5-selected configuration
+is held; it is not a decision that survives this amendment.
+
+**Applied by.** `scripts/select_default.py` (rewritten for equal-budget
+recall), which prints the ordering, the decision, and the R@3000w difference for
+every configuration.
