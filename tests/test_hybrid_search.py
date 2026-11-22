@@ -17,6 +17,7 @@ import pytest
 from clausewright.retrieval.embedder import Embedder
 from clausewright.retrieval.hybrid_search import (
     HybridRetriever,
+    _fused_order,
     _reciprocal_rank_fusion,
     _tokenize,
 )
@@ -143,6 +144,36 @@ def test_rrf_score_values_are_positive() -> None:
     result = _reciprocal_rank_fusion([["a", "b", "c"]], rrf_k=60)
     for v in result.values():
         assert v > 0
+
+
+# ---------------------------------------------------------------------------
+# Fusion order: ties must not depend on channel order
+# ---------------------------------------------------------------------------
+
+
+def test_fused_order_breaks_ties_by_id_not_insertion() -> None:
+    """Two documents at the same rank in different channels tie on RRF.
+
+    With k=60, dense rank 2 ("z") and sparse rank 2 ("a") both score 1/62.
+    Building the dict dense-first inserts "z" before "a"; sorting by value
+    alone would then return "z" first purely because of channel order.
+    """
+    scores = _reciprocal_rank_fusion([["z"], ["a"]], rrf_k=60)
+    assert scores["z"] == scores["a"]
+    assert _fused_order(scores) == ["a", "z"]
+
+
+def test_fused_order_is_channel_order_invariant() -> None:
+    """Reversing the channel order must not change the fused ranking."""
+    dense_first = _reciprocal_rank_fusion([["z", "m"], ["a", "m"]], rrf_k=60)
+    sparse_first = _reciprocal_rank_fusion([["a", "m"], ["z", "m"]], rrf_k=60)
+    assert _fused_order(dense_first) == _fused_order(sparse_first)
+
+
+def test_fused_order_keeps_score_priority() -> None:
+    """A strictly higher score still outranks a lower one with a smaller id."""
+    scores = {"a": 0.01, "z": 0.02}
+    assert _fused_order(scores) == ["z", "a"]
 
 
 # ---------------------------------------------------------------------------
