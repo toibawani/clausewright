@@ -249,3 +249,26 @@ experiment, both under #122.
 
 **What surprised us.** The existing docs blamed PDF extraction for date
 failures. On dev that accounts for two of nineteen.
+
+## E-007: default-selection rule, declared before the deciding run
+
+**Question.** Which chunking becomes the default once the packed chunkers and
+the post-fix fusion sweep are measured?
+
+**Rule (fixed in advance, commit precedes the run).** Among the chunking
+configurations, pick the smallest chunk-size configuration whose paired R@5
+difference versus the best configuration has a 95 percent confidence interval
+that includes zero, for `hybrid_rerank`; if a structure-respecting variant
+meets that rule, prefer it. "Smallest" is the configured word budget;
+`struct` competes at 300 words because its window is 300.
+
+**Why written down first.** The choice decides what every later number is
+measured against. Reading the tables and then naming a winner would make the
+"best" configuration an artefact of which comparisons were run.
+
+**How it is applied.** `scripts/select_default.py --report <factorial JSON>`
+recomputes every interval from the per-query scores by contract and prints the
+ordering plus the single configuration the rule forces. No manual override
+exists in the script.
+
+**Result.** Pending the run; this entry records the rule, not an outcome.
