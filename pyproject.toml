@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "clausewright"
 version = "0.1.0"
-description = "Structure-aware retrieval and grounded question answering over contracts."
+description = "Grounded question answering over contracts with verified citations."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi",

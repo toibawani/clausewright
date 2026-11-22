@@ -53,5 +53,6 @@ python -m clausewright.eval dataset     # rebuild dev/test manifests
 ```
 
 The eval set is 30 contracts × 15 clause categories: 20 contracts / 300 items on dev
-(164 answerable, 136 absent-clause), 10 contracts / 150 items on test (59 answerable,
-91 absent-clause). The split is by contract, seeded, and never tuned across.
+(180 answerable, 120 absent-clause), 10 contracts / 150 items on test (81 answerable,
+69 absent-clause). The split is by contract, seeded with `20261018`, and never tuned
+across. Counts verified against `build_eval_set(CUAD_SMALL)` on 2026-11-21.
