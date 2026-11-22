@@ -33,6 +33,7 @@ from clausewright.qa.schemas import (
     EvidenceItem,
 )
 from clausewright.qa.verifier import verify
+from clausewright.retrieval.span_localizer import SpanLocalizer
 from clausewright.schemas import Chunk
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,11 @@ class AnswerEngine:
         Acceptance floor: if the best reranker score is below this, abstain
         without calling the LLM.  ``None`` disables the gate.  Calibrate on
         the gold set — do not guess.
+    localizer:
+        Optional span localizer. When supplied, each evidence block's citation
+        narrows to the sentence that best supports the question and the
+        verifier checks quotes against that sentence. The window remains the
+        context the model reads. ``None`` (default) cites whole windows.
     """
 
     def __init__(
@@ -87,6 +93,7 @@ class AnswerEngine:
         top_k: int = 50,
         keep_after_rerank: int = 5,
         min_rerank_score: float | None = None,
+        localizer: SpanLocalizer | None = None,
     ) -> None:
         if top_k < 1:
             raise ValueError(f"top_k must be >= 1, got {top_k}")
@@ -98,6 +105,7 @@ class AnswerEngine:
         self._top_k = top_k
         self._keep = keep_after_rerank
         self._min_rerank_score = min_rerank_score
+        self._localizer = localizer
 
     def answer(self, question: str) -> AnswerResult:
         """Answer *question* with verified citations, or abstain usefully."""
@@ -151,8 +159,16 @@ class AnswerEngine:
         user_message = build_user_message(question, evidence)
         raw_output = self._llm.complete(system=SYSTEM_PROMPT, user=user_message)
 
-        # 5. Verify; fail closed.
-        outcome = verify(raw_output, evidence)
+        # 5. Verify; fail closed. With a localizer, the citation is the
+        # localized sentence and quotes must come from it.
+        span_texts: dict[int, str] | None = None
+        if self._localizer is not None:
+            span_texts = {}
+            for item in evidence:
+                span = self._localizer.localize(question, item.chunk.text)
+                if span is not None:
+                    span_texts[item.evidence_id] = span.text
+        outcome = verify(raw_output, evidence, span_texts=span_texts)
 
         if outcome.invalid_output:
             return Abstention(
