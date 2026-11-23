@@ -72,7 +72,7 @@ def load_experiment(experiment_id: str = EXPERIMENT) -> dict[str, Any]:
     entry = index["experiments"][experiment_id]
     data: Any = json.loads((STORE / entry["file"]).read_text())
     if not isinstance(data, dict):
-        raise ValueError(f"{entry['file']} is not a JSON object")
+        raise TypeError(f"{entry['file']} is not a JSON object")
     return data
 
 
@@ -88,10 +88,12 @@ def render_factorial_metrics(record: dict[str, Any]) -> str:
     """Metrics per chunking x retriever, with the run's provenance."""
     dataset = record["dataset"]
     lines = [
-        f"Run `{record['commit']}`, split `{dataset['name']}`, "
-        f"{dataset['n_queries']} answerable queries on {dataset['n_contracts']} contracts, "
-        f"dataset hash `{dataset['hash']}`. Generated from "
-        f"`benchmarks/results/{record['experiment_id']}.json`.",
+        (
+            f"Run `{record['commit']}`, split `{dataset['name']}`, "
+            f"{dataset['n_queries']} answerable queries on {dataset['n_contracts']} contracts, "
+            f"dataset hash `{dataset['hash']}`. Generated from "
+            f"`benchmarks/results/{record['experiment_id']}.json`."
+        ),
         "",
     ]
     labels = ["Config", *[label for _, label in METRIC_COLUMNS]]
@@ -118,13 +120,17 @@ def render_structure_vs_reference(record: dict[str, Any]) -> str:
     """Paired differences of the product chunker against its size-matched window."""
     reference = record["config"].get("reference_chunking", "win300")
     lines = [
-        f"Structure-aware chunking against the size-matched `{reference}` window, "
-        "paired by contract. A difference whose interval includes zero is reported "
-        "as noise.",
+        (
+            f"Structure-aware chunking against the size-matched `{reference}` window, "
+            "paired by contract. A difference whose interval includes zero is reported "
+            "as noise."
+        ),
         "",
     ]
     lines.extend(_header(["Retriever", "Metric", "Difference", "95% CI", "Verdict"]))
     labels = dict(COMPARISON_METRICS)
+    order = {key: index for index, (key, _) in enumerate(COMPARISON_METRICS)}
+    rows: list[tuple[str, int, list[str]]] = []
     for comparison in record["comparisons"]:
         metric = comparison["metric"]
         if metric not in labels:
@@ -148,6 +154,8 @@ def render_structure_vs_reference(record: dict[str, Any]) -> str:
             f"[{low:+.4f}, {high:+.4f}]",
             verdict,
         ]
+        rows.append((retriever, order[metric], cells))
+    for _, _, cells in sorted(rows, key=lambda item: (item[0], item[1])):
         lines.append(_row(cells))
     return "\n".join(lines)
 
