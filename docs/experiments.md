@@ -152,7 +152,7 @@ are in `docs/eval.md`; the headline intervals:
 
 Equal-word-budget recall removes the bm25 and dense losses (intervals include
 zero) but not the hybrid one, so the hybrid gap is not purely a length effect.
-Window size dominates: `win400` has the best R@1 for all four retrievers
+Window size dominates: `win400` has the highest R@1 for all four retrievers
 (0.7190 bm25, 0.6323 dense, 0.6987 hybrid, 0.7400 hybrid_rerank), though at a
 fixed 1500-word budget `win300` is better for bm25 (0.8559 vs 0.8316).
 
@@ -262,7 +262,7 @@ reason.
 **Amended rule.** Primary metric: recall at an equal retrieved budget of 1500
 words. Secondary: recall at 3000 words. Once B4 exists, localized-span hit rate
 and character precision join at the same budget. The mechanics are unchanged:
-the smallest chunk-size configuration whose paired difference against the best
+the smallest chunk-size configuration whose paired difference against the top
 has a 95 percent interval including zero for `hybrid_rerank`, preferring a
 structure-respecting variant when one qualifies.
 

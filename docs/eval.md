@@ -147,8 +147,8 @@ Three things follow, and none of them flatters the design:
 - Window size dominates every other choice here. `win400` beats `win300` on
   R@1 for all four retrievers, but part of that is packing 400 words into a
   slot; at a 1500-word budget `win300` is better for bm25 (0.8559 vs 0.8316).
-- The best cell in the table is `win400:hybrid_rerank` at R@1 0.7400. The
-  product chunker's best cell is 0.6209.
+- The highest cell in the table is `win400:hybrid_rerank` at R@1 0.7400. The
+  product chunker's highest cell is 0.6209.
 
 ## Post-fix structure rerun (2026-11-22)
 
