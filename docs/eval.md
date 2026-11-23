@@ -361,3 +361,23 @@ Structure-aware chunking against the size-matched `win300` window, paired by con
 | `hybrid_rerank` | R@5 | -0.0435 | [-0.0865, -0.0014] | structure differs |
 | `hybrid_rerank` | R@1500w | -0.0081 | [-0.0417, +0.0233] | noise |
 <!-- END GENERATED: factorial_struct_vs_reference -->
+
+## Part B: packed chunkers and the selection decision
+
+Two chunkings that keep section boundaries and pack consecutive sections up to a
+word budget, `struct_packed_300` and `struct_packed_400`, were added to the
+factorial. Their rows are in the generated tables above, next to the fixed-window
+rows they are meant to be compared with.
+
+The default is now chosen on recall at a 1500-word budget rather than on recall
+at k, because recall at k rewards a chunker for emitting longer chunks (E-008 in
+`docs/experiments.md`). Under that rule the product chunker at 300 words is the
+selection, and it is labelled exploratory: its difference from the strongest
+fixed window at the same budget has an interval that includes zero, so the
+measurement does not separate them. The earlier selection, win500 with
+`hybrid_rerank` chosen on R@5, is not adopted.
+
+No configuration is presented as better than another unless its interval
+excludes zero. Where an interval includes zero, this document says the
+difference is noise at this sample size, which is a statement about 20 contracts
+rather than about contracts in general.
