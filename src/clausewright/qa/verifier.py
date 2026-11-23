@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from enum import Enum
 from typing import Any, Final
 
@@ -141,10 +141,22 @@ def parse_model_output(raw: str) -> tuple[_ModelResponse | None, str | None]:
 
 
 def verify_claims(
-    response: _ModelResponse, evidence: Sequence[EvidenceItem]
+    response: _ModelResponse,
+    evidence: Sequence[EvidenceItem],
+    span_texts: Mapping[int, str] | None = None,
 ) -> VerificationOutcome:
-    """Apply the evidence-id and verbatim-quote checks to every claim."""
+    """Apply the evidence-id and verbatim-quote checks to every claim.
+
+    ``span_texts`` narrows the quote check to a localized span of the cited
+    chunk. The chunk stays the context; the span is what the citation points
+    at, so a quote must be present in the span to survive. Evidence without an
+    entry falls back to the whole chunk.
+    """
     by_id = {item.evidence_id: item for item in evidence}
+    spans = span_texts or {}
+
+    def _citeable_text(item: EvidenceItem) -> str:
+        return spans.get(item.evidence_id, item.chunk.text)
     valid: list[Claim] = []
     dropped: list[DropRecord] = []
 
@@ -158,7 +170,7 @@ def verify_claims(
             continue
         normalised_quote = _normalise(mc.quote)
         cited_items = [by_id[i] for i in ids]
-        if not any(normalised_quote in _normalise(it.chunk.text) for it in cited_items):
+        if not any(normalised_quote in _normalise(_citeable_text(it)) for it in cited_items):
             dropped.append(
                 DropRecord(text_preview=preview, reason=DropReason.QUOTE_NOT_FOUND)
             )
@@ -187,13 +199,17 @@ def verify_claims(
     )
 
 
-def verify(raw_output: str, evidence: Sequence[EvidenceItem]) -> VerificationOutcome:
+def verify(
+    raw_output: str,
+    evidence: Sequence[EvidenceItem],
+    span_texts: Mapping[int, str] | None = None,
+) -> VerificationOutcome:
     """Full pipeline: parse then verify.  Never raises on bad model output."""
     response, parse_detail = parse_model_output(raw_output)
     if response is None:
         logger.info("Model output rejected: %s", parse_detail)
         return VerificationOutcome(invalid_output=True, invalid_detail=parse_detail)
-    outcome = verify_claims(response, evidence)
+    outcome = verify_claims(response, evidence, span_texts=span_texts)
     logger.info(
         "Verification: %d valid, %d dropped, unanswerable=%s",
         len(outcome.valid_claims),

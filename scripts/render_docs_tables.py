@@ -216,18 +216,88 @@ def render_readme_headline(record: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def render_span_localization(record: dict[str, Any]) -> str:
+    """Citing a localized sentence against citing the whole retrieved window."""
+    dataset = record["dataset"]
+    config = record["config"]
+    lines = [
+        (
+            f"Run `{record['commit']}`, {dataset['n_items_measured']} queries with a "
+            f"gold window on {dataset['n_contracts']} contracts, "
+            f"{config.get('budget_words')}-word retrieved budget, "
+            f"{dataset['n_items_without_gold_window']} queries without a gold "
+            "window excluded."
+        ),
+        "",
+    ]
+    lines.extend(_header(["Citation", "Span hit", "Mean chars", "Char precision", "Char recall"]))
+    for key in ("window", "bm25", "cross_encoder"):
+        metrics = record["summary"][key]
+        lines.append(
+            _row(
+                [
+                    f"`{key}`",
+                    f"{metrics['span_hit_rate']:.4f}",
+                    f"{metrics['mean_chars']:.1f}",
+                    f"{metrics['char_precision']:.4f}",
+                    f"{metrics['char_recall']:.4f}",
+                ]
+            )
+        )
+
+    labels = {"char_precision": "char precision", "char_recall": "char recall", "span_hit": "span hit"}
+    order = {key: index for index, key in enumerate(labels)}
+    rows: list[tuple[str, int, list[str]]] = []
+    for comparison in record["comparisons"]:
+        metric = comparison["metric"]
+        if metric not in labels:
+            continue
+        point = comparison["point"]
+        sign = "+" if point >= 0 else "-"
+        low, high = sorted((comparison["ci_low"], comparison["ci_high"]))
+        rows.append(
+            (
+                str(comparison["left"]),
+                order[metric],
+                [
+                    f"`{comparison['left']}`",
+                    labels[metric],
+                    f"{sign}{abs(point):.4f}",
+                    f"[{low:+.4f}, {high:+.4f}]",
+                    "differs" if comparison["excludes_zero"] else "noise",
+                ],
+            )
+        )
+
+    lines.append("")
+    lines.append("Each localizer against the window it localizes, paired by contract:")
+    lines.append("")
+    lines.extend(_header(["Localizer", "Metric", "Difference", "95% CI", "Verdict"]))
+    for _, _, cells in sorted(rows, key=lambda item: (item[0], item[1])):
+        lines.append(_row(cells))
+    return "\n".join(lines)
+
+
 RENDERERS = {
     "factorial_metrics": render_factorial_metrics,
     "factorial_chunks": render_factorial_chunks,
     "factorial_struct_vs_reference": render_structure_vs_reference,
     "readme_headline": render_readme_headline,
+    "span_localization": render_span_localization,
 }
+
+#: Blocks that read a different aggregate than the factorial.
+BLOCK_EXPERIMENTS = {"span_localization": "span-localization-3b48a8d"}
 
 
 def rendered_blocks() -> dict[str, str]:
     """Every block available for insertion, keyed by marker name."""
-    record = load_experiment()
-    return {name: render(record) for name, render in RENDERERS.items()}
+    default = load_experiment()
+    blocks: dict[str, str] = {}
+    for name, render in RENDERERS.items():
+        experiment = BLOCK_EXPERIMENTS.get(name)
+        blocks[name] = render(default if experiment is None else load_experiment(experiment))
+    return blocks
 
 
 def apply_blocks(text: str, blocks: dict[str, str]) -> tuple[str, list[str]]:

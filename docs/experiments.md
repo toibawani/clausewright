@@ -311,3 +311,21 @@ hold, the flag stays off this round; turning it on is the owner's call.
 
 **Status.** Preregistered before the run. The result file carries the commit,
 clean-tree flag, model names, and threading settings of the run that produced it.
+
+**Result (2026-11-23, `3b48a8d`).** 160 queries had a gold-bearing window inside
+the 1500-word budget; 20 did not and are excluded. Citing the whole window keeps
+the clause in every one of the 160 by construction. BM25-within-window keeps it
+in 0.4000, the cross-encoder in 0.4875. Character precision rises from 0.1733 to
+0.4472 and 0.5523, with paired intervals excluding zero (+0.2739 [+0.2238,
++0.3256] and +0.3790 [+0.3210, +0.4390]). Character recall falls from 0.8566 to
+0.6032 and 0.6251, and span hit falls by 0.6000 and 0.5125, both intervals
+excluding zero.
+
+The rule allowed a loss of no more than two points of span hit rate. It is lost
+by far more, so the rule is not met: `localize_spans` stays off and the product
+keeps citing the whole window. The likely cause is that one sentence rarely
+holds the whole clause a gold span marks; measuring a paragraph-sized citation
+unit is the obvious next experiment, and it is not run here.
+
+The aggregate is `benchmarks/results/span-localization-3b48a8d.json`; the table
+in `docs/eval.md` is generated from it.

@@ -6,6 +6,13 @@
       "protocol": "E-008",
       "commit": "3ae9c47",
       "split": "dev"
+    },
+    "span-localization-3b48a8d": {
+      "file": "span-localization-3b48a8d.json",
+      "kind": "span_localization",
+      "protocol": "E-009",
+      "commit": "3b48a8d",
+      "split": "dev"
     }
   }
 }

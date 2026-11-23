@@ -381,3 +381,39 @@ No configuration is presented as better than another unless its interval
 excludes zero. Where an interval includes zero, this document says the
 difference is noise at this sample size, which is a statement about 20 contracts
 rather than about contracts in general.
+
+## Span localization (E-009, `3b48a8d`)
+
+E-009 asked whether citing one sentence inside the retrieved window beats
+citing the whole window. It was preregistered in `docs/experiments.md` before
+the run; the run is recorded in
+`benchmarks/results/span-localization-3b48a8d.json`, and the table below is
+generated from it.
+
+<!-- BEGIN GENERATED: span_localization -->
+Run `3b48a8d`, 160 queries with a gold window on 20 contracts, 1500-word retrieved budget, 20 queries without a gold window excluded.
+
+| Citation | Span hit | Mean chars | Char precision | Char recall |
+|---|---|---|---|---|
+| `window` | 1.0000 | 1445.4 | 0.1733 | 0.8566 |
+| `bm25` | 0.4000 | 384.1 | 0.4472 | 0.6032 |
+| `cross_encoder` | 0.4875 | 306.8 | 0.5523 | 0.6251 |
+
+Each localizer against the window it localizes, paired by contract:
+
+| Localizer | Metric | Difference | 95% CI | Verdict |
+|---|---|---|---|---|
+| `bm25` | char precision | +0.2739 | [+0.2238, +0.3256] | differs |
+| `bm25` | char recall | -0.2534 | [-0.3021, -0.2078] | differs |
+| `bm25` | span hit | -0.6000 | [-0.6867, -0.5059] | differs |
+| `cross_encoder` | char precision | +0.3790 | [+0.3210, +0.4390] | differs |
+| `cross_encoder` | char recall | -0.2316 | [-0.2877, -0.1834] | differs |
+| `cross_encoder` | span hit | -0.5125 | [-0.6176, -0.4079] | differs |
+<!-- END GENERATED: span_localization -->
+
+Character precision rises for both localizers and the intervals exclude zero,
+but span hit rate falls sharply: the sentence selected is often not the
+sentence that holds the clause, and character recall falls with it. Under the
+preregistered rule the difference has to come without losing more than two
+points of span hit rate, so the rule is not met. `localize_spans` stays off by
+default and the product keeps citing the whole retrieved window.
