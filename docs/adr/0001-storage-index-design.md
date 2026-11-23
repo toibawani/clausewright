@@ -50,7 +50,7 @@ Clausewright requires a robust, secure, and deployable persistence layer to supp
 #### Option 4: Qdrant
 - **Overview**: High-performance Rust-based vector search engine with payload filtering.
 - **Pros**:
-  - Excellent vector search speed and flexible metadata filtering.
+  - Fast vector search and flexible metadata filtering.
 - **Cons**:
   - Requires running a dedicated server daemon (Docker container).
   - Overkill for single-node / small-firm deployments.

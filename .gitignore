@@ -15,5 +15,12 @@ data/store/
 data/eval/
 data/llm_cache/
 
-# Result files embed contract-derived quotes; never commit them.
+# Raw result files embed contract-derived quotes; never commit them.
 results/
+
+# Aggregates carry metrics and provenance only, and are committed.
+!benchmarks/results/
+!benchmarks/results/**
+
+# Scratch space for files moved out of the tree; never committed.
+scratch/

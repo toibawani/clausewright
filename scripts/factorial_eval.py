@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from clausewright.eval.baselines import fixed_window_chunks
+from clausewright.eval.cache import CachedEmbedder, CachedReranker
 from clausewright.eval.dataset import CUAD_SMALL, EvalItem, build_eval_set
 from clausewright.eval.metrics import (
     SPAN_OVERLAP_THRESHOLD,
@@ -62,16 +63,28 @@ from clausewright.eval.metrics import (
     percentile,
     recall_at_k,
 )
+from clausewright.eval.provenance import provenance, require_clean_tree
 from clausewright.eval.stats import PairedDifference, paired_bootstrap
 from clausewright.ingestion import chunk_sections, load_pdf, parse_sections
-from clausewright.retrieval.embedder import Embedder
+from clausewright.ingestion.packed_chunker import pack_sections
 from clausewright.retrieval.hybrid_search import HybridRetriever
 from clausewright.retrieval.reranker import CrossEncoderReranker
 from clausewright.schemas import Chunk, ParsedDocument, Section
 
 #: Chunkings under test. ``struct`` is the product chunker at its default
-#: 300-word window; ``winN`` is the fixed-window baseline at N words.
-CHUNKINGS: tuple[str, ...] = ("struct", "win150", "win200", "win300", "win400")
+#: 300-word window; ``struct_packed_N`` packs whole sections up to N words
+#: without crossing a top-level article; ``winN`` is the fixed-window
+#: baseline at N words.
+CHUNKINGS: tuple[str, ...] = (
+    "struct",
+    "struct_packed_300",
+    "struct_packed_400",
+    "win150",
+    "win200",
+    "win300",
+    "win400",
+    "win500",
+)
 RETRIEVERS: tuple[str, ...] = ("bm25", "dense", "hybrid", "hybrid_rerank")
 
 #: Equal retrieved budgets, in words.
@@ -149,6 +162,8 @@ def build_chunks(
     """Materialise the chunk list for one chunking of one document."""
     if chunking == "struct":
         return chunk_sections(doc_id, sections)
+    if chunking.startswith("struct_packed_"):
+        return pack_sections(doc_id, sections, max_words=int(chunking.rsplit("_", 1)[-1]))
     if not chunking.startswith("win"):
         raise ValueError(f"unknown chunking: {chunking}")
     size = int(chunking[3:])
@@ -255,8 +270,11 @@ def run_factorial(
     retrievers: tuple[str, ...],
     sample_contracts: int | None,
     dump_per_query: bool = False,
+    reference: str = "win300",
 ) -> dict[str, Any]:
     """Run the factorial and return a JSON-serialisable report."""
+    # A number produced from a dirty tree matches no commit; refuse it.
+    require_clean_tree()
     started = time.time()
     header = proof_header()
     print(f"branch={header['branch']} commit={header['commit']} python={header['python']}")
@@ -271,8 +289,8 @@ def run_factorial(
     if sample_contracts is not None:
         titles = titles[:sample_contracts]
 
-    embedder = Embedder()
-    reranker = CrossEncoderReranker() if "hybrid_rerank" in retrievers else None
+    embedder = CachedEmbedder()
+    reranker = CachedReranker() if "hybrid_rerank" in retrievers else None
 
     # (chunking, retriever) -> scores
     cells: dict[tuple[str, str], list[QueryScore]] = {
@@ -306,36 +324,53 @@ def run_factorial(
         for name in retrievers:
             summary[f"{chunking}:{name}"] = _summarise(cells[(chunking, name)])
 
-    # Comparisons that hold size and retriever fixed.
+    # Every chunking against the reference chunking, holding the retriever
+    # fixed, so the interval answers one question: does chunking X differ
+    # from the reference on the same queries?
     comparisons: list[PairedDifference] = []
-    for name in retrievers:
-        if "struct" in chunkings and "win300" in chunkings:
-            left = cells[("struct", name)]
-            right = cells[("win300", name)]
-            for metric in ("recall_at_5", "recall_at_1", "mrr", "recall_at_1500w"):
-                pairs = [
-                    (a.contract, getattr(a, metric), getattr(b, metric))
-                    for a, b in zip(left, right)
-                ]
-                comparisons.append(
-                    paired_bootstrap(
-                        metric=metric,
-                        left_label=f"struct:{name}",
-                        right_label=f"win300:{name}",
-                        pairs=pairs,
-                        seed=SEED,
+    if reference in chunkings:
+        for name in retrievers:
+            right = cells[(reference, name)]
+            for chunking in chunkings:
+                if chunking == reference:
+                    continue
+                left = cells[(chunking, name)]
+                for metric in ("recall_at_5", "recall_at_1", "mrr", "recall_at_1500w"):
+                    pairs = [
+                        (a.contract, getattr(a, metric), getattr(b, metric))
+                        for a, b in zip(left, right)
+                    ]
+                    comparisons.append(
+                        paired_bootstrap(
+                            metric=metric,
+                            left_label=f"{chunking}:{name}",
+                            right_label=f"{reference}:{name}",
+                            pairs=pairs,
+                            seed=SEED,
+                        )
                     )
-                )
 
     report: dict[str, Any] = {
         "timestamp": datetime.now(UTC).isoformat(),
         "header": header,
+        "provenance": provenance(
+            embedding_model=embedder.model_name,
+            reranker_model=reranker.model_name if reranker is not None else None,
+            reranker_batch_size=reranker._batch_size if reranker is not None else None,
+        ),
+        "cache": {
+            "embedding_hits": embedder.hits,
+            "embedding_misses": embedder.misses,
+            "rerank_hits": reranker.hits if reranker is not None else 0,
+            "rerank_misses": reranker.misses if reranker is not None else 0,
+        },
         "config": {
             "split": split,
             "chunkings": list(chunkings),
             "retrievers": list(retrievers),
             "rerank_candidates": RERANK_CANDIDATES,
             "word_budgets": list(WORD_BUDGETS),
+            "reference_chunking": reference,
             "span_overlap_threshold": SPAN_OVERLAP_THRESHOLD,
             "seed": SEED,
         },
@@ -358,6 +393,7 @@ def run_factorial(
                     "recall_at_10": s.recall_at_10,
                     "mrr": s.mrr,
                     "recall_at_1500w": s.recall_at_1500w,
+                    "recall_at_3000w": s.recall_at_3000w,
                 }
                 for s in cells[(chunking, name)]
             ]
@@ -397,7 +433,8 @@ def print_report(report: dict[str, Any]) -> None:
         )
 
     if report["comparisons"]:
-        print("\n=== paired bootstrap, structure vs fixed window at 300 words ===")
+        reference = report["config"]["reference_chunking"]
+        print(f"\n=== paired bootstrap, every chunking vs {reference} ===")
         print("(10000 resamples by contract, seed 20261018)")
         for comp in report["comparisons"]:
             verdict = "excludes 0" if comp["excludes_zero"] else "includes 0"
@@ -423,6 +460,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--sample", type=int, default=None, help="first N contracts")
     parser.add_argument(
+        "--reference",
+        default="win300",
+        help="chunking every other chunking is compared against",
+    )
+    parser.add_argument(
         "--out", default="data/eval/factorial.json", help="JSON output path"
     )
     parser.add_argument(
@@ -437,6 +479,8 @@ def main(argv: list[str] | None = None) -> int:
     unknown = [c for c in chunkings if c not in CHUNKINGS]
     if unknown:
         parser.error(f"unknown chunking(s): {unknown}")
+    if args.reference not in chunkings:
+        parser.error(f"reference chunking {args.reference} is not in --chunkings")
     unknown_r = [r for r in retrievers if r not in RETRIEVERS]
     if unknown_r:
         parser.error(f"unknown retriever(s): {unknown_r}")
@@ -447,6 +491,7 @@ def main(argv: list[str] | None = None) -> int:
         retrievers=retrievers,
         sample_contracts=args.sample,
         dump_per_query=args.dump_per_query,
+        reference=args.reference,
     )
     print_report(report)
 
