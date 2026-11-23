@@ -73,8 +73,9 @@ def test_a_different_seed_changes_the_draw() -> None:
 
 
 def test_a_bad_size_is_rejected() -> None:
+    # The size guard runs before the set is touched, so no CUAD file is needed.
     with pytest.raises(ValueError):
-        build_answer_eval_set(build_eval_set(CUAD_SMALL), n=0)
+        build_answer_eval_set(None, n=0)  # type: ignore[arg-type]
 
 
 @requires_cuad
