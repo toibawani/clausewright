@@ -11,6 +11,8 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from clausewright.eval.dataset import CUAD_SMALL, build_eval_set
 from clausewright.eval.part_c import (
     ABSENT_SHARE,
@@ -19,6 +21,18 @@ from clausewright.eval.part_c import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _has_cuad() -> bool:
+    """True when the CUAD annotations are on disk; CI fetches them separately."""
+    try:
+        build_eval_set(CUAD_SMALL)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+requires_cuad = pytest.mark.skipif(not _has_cuad(), reason="CUAD annotations not present")
 
 
 def _script(name: str) -> Any:
@@ -30,6 +44,7 @@ def _script(name: str) -> Any:
     return module
 
 
+@requires_cuad
 def test_the_set_has_the_declared_size_and_mix() -> None:
     items = build_answer_eval_set(build_eval_set(CUAD_SMALL))
 
@@ -39,6 +54,7 @@ def test_the_set_has_the_declared_size_and_mix() -> None:
     assert all(item.split == "dev" for item in items)
 
 
+@requires_cuad
 def test_the_draw_is_deterministic() -> None:
     eval_set = build_eval_set(CUAD_SMALL)
     first = [item.item_id for item in build_answer_eval_set(eval_set)]
@@ -48,6 +64,7 @@ def test_the_draw_is_deterministic() -> None:
     assert first == sorted(first)
 
 
+@requires_cuad
 def test_a_different_seed_changes_the_draw() -> None:
     eval_set = build_eval_set(CUAD_SMALL)
     other = [item.item_id for item in build_answer_eval_set(eval_set, seed=7)]
@@ -55,11 +72,12 @@ def test_a_different_seed_changes_the_draw() -> None:
     assert other != [item.item_id for item in build_answer_eval_set(eval_set)]
 
 
-def test_an_unknown_split_is_rejected() -> None:
-    with __import__("pytest").raises(Exception):
-        build_answer_eval_set(build_eval_set(CUAD_SMALL), split="heldout")  # type: ignore[arg-type]
+def test_a_bad_size_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        build_answer_eval_set(build_eval_set(CUAD_SMALL), n=0)
 
 
+@requires_cuad
 def test_cost_counts_one_call_per_question_and_marks_the_dry_run() -> None:
     result = _script("part_c_dry_run").run(4)
 
@@ -69,6 +87,7 @@ def test_cost_counts_one_call_per_question_and_marks_the_dry_run() -> None:
     assert isinstance(result["provenance"]["clean_tree"], bool)
 
 
+@requires_cuad
 def test_the_dry_run_table_is_marked_as_a_dry_run() -> None:
     module = _script("part_c_dry_run")
     table = module.render_table(module.run(3))
