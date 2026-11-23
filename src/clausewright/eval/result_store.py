@@ -69,7 +69,7 @@ def load_index(root: Path) -> dict[str, Any]:
     """Load ``benchmarks/results/index.json``."""
     data: Any = json.loads((root / "index.json").read_text())
     if not isinstance(data, dict):
-        raise ValueError(f"{root / 'index.json'} is not a JSON object")
+        raise TypeError(f"{root / 'index.json'} is not a JSON object")
     return data
 
 
