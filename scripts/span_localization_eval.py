@@ -3,7 +3,8 @@
 For every dev query where a retrieved window contains the gold clause, this
 compares three citations:
 
-* ``window`` - the whole retrieved chunk (what the product cites today);
+* ``window`` - the whole retrieved chunk (what the product cites today), taken
+  from the chunks inside a 1500-word budget;
 * ``bm25`` - the best sentence of that window by BM25 within the window;
 * ``cross_encoder`` - the best sentence by cross-encoder score.
 
@@ -28,19 +29,22 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from clausewright.eval.cache import CachedEmbedder, CachedReranker
 from clausewright.eval.dataset import CUAD_SMALL, EvalItem, build_eval_set
 from clausewright.eval.metrics import SPAN_OVERLAP_THRESHOLD, overlap_ratio
+from clausewright.eval.provenance import provenance, require_clean_tree
 from clausewright.eval.stats import PairedDifference, paired_bootstrap
 from clausewright.ingestion import chunk_sections, load_pdf, parse_sections
-from clausewright.retrieval.embedder import Embedder
 from clausewright.retrieval.hybrid_search import HybridRetriever
-from clausewright.retrieval.reranker import CrossEncoderReranker
 from clausewright.retrieval.span_localizer import SpanLocalizer
 from clausewright.schemas import Chunk
 
 RERANK_CANDIDATES = 25
 TOP_K = 10
 SEED = CUAD_SMALL.seed
+
+#: Retrieved budget, in words, that the decision rule names.
+BUDGET_WORDS = 1500
 
 
 def _norm(text: str) -> str:
@@ -74,16 +78,36 @@ def _span_hit(golds: list[str], candidate: str) -> bool:
     return any(overlap_ratio(g, candidate) >= SPAN_OVERLAP_THRESHOLD for g in golds)
 
 
-def _gold_window(item: EvalItem, ranked: list[Chunk]) -> Chunk | None:
-    """First retrieved chunk that already contains a gold span."""
+def _gold_window(
+    item: EvalItem,
+    ranked: list[Chunk],
+    budget_words: int = BUDGET_WORDS,
+) -> Chunk | None:
+    """First chunk inside the retrieved word budget that holds a gold span.
+
+    Chunks are taken in ranked order until the next one would exceed the budget,
+    which is the same selection rule the equal-budget recall metric uses. A
+    citation cannot point at a chunk the budget never shows the reader.
+    """
     golds = list(item.gold_texts)
+    used = 0
     for chunk in ranked:
+        words = len(chunk.text.split())
+        if used + words > budget_words:
+            break
+        used += words
         if _span_hit(golds, chunk.text):
             return chunk
     return None
 
 
-def evaluate(*, split: str, sample_contracts: int | None) -> dict[str, Any]:
+def evaluate(
+    *,
+    split: str,
+    sample_contracts: int | None,
+    budget_words: int = BUDGET_WORDS,
+) -> dict[str, Any]:
+    require_clean_tree()
     eval_set = build_eval_set(CUAD_SMALL)
     items = [i for i in eval_set.by_split(split) if i.is_answerable]  # type: ignore[arg-type]
     by_contract: dict[str, list[EvalItem]] = defaultdict(list)
@@ -93,8 +117,8 @@ def evaluate(*, split: str, sample_contracts: int | None) -> dict[str, Any]:
     if sample_contracts is not None:
         titles = titles[:sample_contracts]
 
-    embedder = Embedder()
-    reranker = CrossEncoderReranker()
+    embedder = CachedEmbedder()
+    reranker = CachedReranker()
     localizers = {
         "bm25": SpanLocalizer(method="bm25", model=reranker._model),
         "cross_encoder": SpanLocalizer(method="cross_encoder", model=reranker._model),
@@ -113,7 +137,7 @@ def evaluate(*, split: str, sample_contracts: int | None) -> dict[str, Any]:
         for item in contract_items:
             candidates = retriever.search(item.question, top_k=RERANK_CANDIDATES)
             ranked = [c for c, _ in reranker.rerank(item.question, candidates, top_n=TOP_K)]
-            window = _gold_window(item, ranked)
+            window = _gold_window(item, ranked, budget_words)
             if window is None:
                 skipped_no_window += 1
                 continue
@@ -183,10 +207,22 @@ def evaluate(*, split: str, sample_contracts: int | None) -> dict[str, Any]:
 
     return {
         "timestamp": datetime.now(UTC).isoformat(),
+        "provenance": provenance(
+            embedding_model=embedder.model_name,
+            reranker_model=reranker.model_name,
+            reranker_batch_size=reranker._batch_size,
+        ),
+        "cache": {
+            "embedding_hits": embedder.hits,
+            "embedding_misses": embedder.misses,
+            "rerank_hits": reranker.hits,
+            "rerank_misses": reranker.misses,
+        },
         "config": {
             "split": split,
             "top_k": TOP_K,
             "rerank_candidates": RERANK_CANDIDATES,
+            "budget_words": budget_words,
             "span_overlap_threshold": SPAN_OVERLAP_THRESHOLD,
             "seed": SEED,
         },
@@ -232,12 +268,17 @@ def print_report(report: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--split", default="dev", choices=["dev", "test"])
+    parser.add_argument("--split", default="dev", choices=["dev"])
     parser.add_argument("--sample", type=int, default=None)
+    parser.add_argument("--budget", type=int, default=BUDGET_WORDS)
     parser.add_argument("--out", default="data/eval/span_localization.json")
     args = parser.parse_args(argv)
 
-    report = evaluate(split=args.split, sample_contracts=args.sample)
+    report = evaluate(
+        split=args.split,
+        sample_contracts=args.sample,
+        budget_words=args.budget,
+    )
     print_report(report)
 
     out = Path(args.out)
