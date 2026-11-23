@@ -152,7 +152,7 @@ are in `docs/eval.md`; the headline intervals:
 
 Equal-word-budget recall removes the bm25 and dense losses (intervals include
 zero) but not the hybrid one, so the hybrid gap is not purely a length effect.
-Window size dominates: `win400` has the best R@1 for all four retrievers
+Window size dominates: `win400` has the highest R@1 for all four retrievers
 (0.7190 bm25, 0.6323 dense, 0.6987 hybrid, 0.7400 hybrid_rerank), though at a
 fixed 1500-word budget `win300` is better for bm25 (0.8559 vs 0.8316).
 
@@ -262,7 +262,7 @@ reason.
 **Amended rule.** Primary metric: recall at an equal retrieved budget of 1500
 words. Secondary: recall at 3000 words. Once B4 exists, localized-span hit rate
 and character precision join at the same budget. The mechanics are unchanged:
-the smallest chunk-size configuration whose paired difference against the best
+the smallest chunk-size configuration whose paired difference against the top
 has a 95 percent interval including zero for `hybrid_rerank`, preferring a
 structure-respecting variant when one qualifies.
 
@@ -277,3 +277,55 @@ is held; it is not a decision that survives this amendment.
 **Applied by.** `scripts/select_default.py` (rewritten for equal-budget
 recall), which prints the ordering, the decision, and the R@3000w difference for
 every configuration.
+
+## E-009: span localization inside the cited window (preregistered 2026-11-23)
+
+**Question.** When a retrieved window already contains the clause, does citing
+one sentence inside it give the reader a tighter citation than citing the whole
+window, without losing the clause?
+
+**Hypothesis.** Character precision against the gold span rises for both
+localizers, and span hit rate - which decides whether the citation still holds
+the clause - falls by no more than 2 points.
+
+**Design.** Dev split only: 20 contracts, 180 answerable queries. Product
+chunking `struct` at 300 words, hybrid retrieval, 25 rerank candidates, top 10.
+Per item, chunks are taken in ranked order until a 1500-word budget; the first
+chunk inside that budget that holds a gold span is today's citation. Each
+localizer picks one sentence from it: `bm25` scores sentences by term overlap
+within the window, `cross_encoder` scores them with the reranker model. If a
+localizer returns nothing, the citation stays the whole chunk, which is what the
+product does now.
+
+**Metrics.** Span hit rate at the existing 50 percent token-overlap threshold;
+character precision and recall against the gold span; mean cited characters.
+Paired bootstrap over contracts, 10000 resamples, seed 20261018, each localizer
+against the window it localizes.
+
+**Decision rule.** `localize_spans` may become default only if character
+precision at the 1500-word budget rises with a paired 95 percent interval that
+excludes zero, and span hit rate falls by no more than 2 points. Even if both
+hold, the flag stays off this round; turning it on is the owner's call.
+
+**Budget.** About two hours of CPU, one job at a time, no LLM calls.
+
+**Status.** Preregistered before the run. The result file carries the commit,
+clean-tree flag, model names, and threading settings of the run that produced it.
+
+**Result (2026-11-23, `3b48a8d`).** 160 queries had a gold-bearing window inside
+the 1500-word budget; 20 did not and are excluded. Citing the whole window keeps
+the clause in every one of the 160 by construction. BM25-within-window keeps it
+in 0.4000, the cross-encoder in 0.4875. Character precision rises from 0.1733 to
+0.4472 and 0.5523, with paired intervals excluding zero (+0.2739 [+0.2238,
++0.3256] and +0.3790 [+0.3210, +0.4390]). Character recall falls from 0.8566 to
+0.6032 and 0.6251, and span hit falls by 0.6000 and 0.5125, both intervals
+excluding zero.
+
+The rule allowed a loss of no more than two points of span hit rate. It is lost
+by far more, so the rule is not met: `localize_spans` stays off and the product
+keeps citing the whole window. The likely cause is that one sentence rarely
+holds the whole clause a gold span marks; measuring a paragraph-sized citation
+unit is the obvious next experiment, and it is not run here.
+
+The aggregate is `benchmarks/results/span-localization-3b48a8d.json`; the table
+in `docs/eval.md` is generated from it.

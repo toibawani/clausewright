@@ -1,0 +1,136 @@
+{
+  "cache": {
+    "embedding_hits": 1052,
+    "embedding_misses": 0,
+    "rerank_hits": 4103,
+    "rerank_misses": 0
+  },
+  "commit": "3b48a8d",
+  "comparisons": [
+    {
+      "ci_high": 0.3256,
+      "ci_low": 0.2238,
+      "excludes_zero": true,
+      "left": "bm25",
+      "metric": "char_precision",
+      "n_contracts": 20,
+      "n_pairs": 160,
+      "point": 0.2739,
+      "right": "window"
+    },
+    {
+      "ci_high": -0.2078,
+      "ci_low": -0.3021,
+      "excludes_zero": true,
+      "left": "bm25",
+      "metric": "char_recall",
+      "n_contracts": 20,
+      "n_pairs": 160,
+      "point": -0.2534,
+      "right": "window"
+    },
+    {
+      "ci_high": -0.5059,
+      "ci_low": -0.6867,
+      "excludes_zero": true,
+      "left": "bm25",
+      "metric": "span_hit",
+      "n_contracts": 20,
+      "n_pairs": 160,
+      "point": -0.6,
+      "right": "window"
+    },
+    {
+      "ci_high": 0.439,
+      "ci_low": 0.321,
+      "excludes_zero": true,
+      "left": "cross_encoder",
+      "metric": "char_precision",
+      "n_contracts": 20,
+      "n_pairs": 160,
+      "point": 0.379,
+      "right": "window"
+    },
+    {
+      "ci_high": -0.1834,
+      "ci_low": -0.2877,
+      "excludes_zero": true,
+      "left": "cross_encoder",
+      "metric": "char_recall",
+      "n_contracts": 20,
+      "n_pairs": 160,
+      "point": -0.2316,
+      "right": "window"
+    },
+    {
+      "ci_high": -0.4079,
+      "ci_low": -0.6176,
+      "excludes_zero": true,
+      "left": "cross_encoder",
+      "metric": "span_hit",
+      "n_contracts": 20,
+      "n_pairs": 160,
+      "point": -0.5125,
+      "right": "window"
+    }
+  ],
+  "config": {
+    "budget_words": 1500,
+    "rerank_candidates": 25,
+    "seed": 20261018,
+    "span_overlap_threshold": 0.5,
+    "split": "dev",
+    "top_k": 10
+  },
+  "dataset": {
+    "hash": "5174daa11351d36c02eee257e924db79",
+    "n_contracts": 20,
+    "n_items_measured": 160,
+    "n_items_without_gold_window": 20,
+    "name": "dev"
+  },
+  "experiment_id": "span-localization-3b48a8d",
+  "kind": "span_localization",
+  "protocol": "E-009",
+  "provenance": {
+    "branch": "HEAD",
+    "clausewright_path": "/Users/apple/dev/cw-run-span/src/clausewright/__init__.py",
+    "clean_tree": true,
+    "commit": "3b48a8deb215b36e0a112f90149c6c6762eb48a4",
+    "commit_short": "3b48a8d",
+    "dirty_override": false,
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O",
+    "python": "3.13.4",
+    "reranker_batch_size": 64,
+    "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "threads": {
+      "KMP_DUPLICATE_LIB_OK": "TRUE",
+      "MKL_NUM_THREADS": "unset",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "unset",
+      "TOKENIZERS_PARALLELISM": "false"
+    },
+    "timestamp": "2026-11-23T05:37:18.592113+00:00"
+  },
+  "summary": {
+    "bm25": {
+      "char_precision": 0.4472,
+      "char_recall": 0.6032,
+      "mean_chars": 384.1,
+      "span_hit_rate": 0.4
+    },
+    "cross_encoder": {
+      "char_precision": 0.5523,
+      "char_recall": 0.6251,
+      "mean_chars": 306.8,
+      "span_hit_rate": 0.4875
+    },
+    "window": {
+      "char_precision": 0.1733,
+      "char_recall": 0.8566,
+      "mean_chars": 1445.4,
+      "span_hit_rate": 1.0
+    }
+  }
+}

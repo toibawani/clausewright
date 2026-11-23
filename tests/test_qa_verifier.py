@@ -229,3 +229,48 @@ class TestVerify:
         assert outcome.invalid_output
         assert outcome.valid_claims == ()
 
+
+
+class TestSpanRestrictedVerification:
+    """A localized citation must be supported by the span, not the window."""
+
+    def test_quote_outside_the_localized_span_is_dropped(self) -> None:
+        # The window contains both quotes; the span contains only the second.
+        window = INDEMNITY_TEXT + " " + TERMINATION_TEXT
+        evidence = _evidence((1, _chunk(0, window)))
+        span_texts = {1: TERMINATION_TEXT}
+        payload = json.dumps(
+            {
+                "answerable": True,
+                "claims": [
+                    {"text": "Indemnity applies.", "quote": "indemnify and hold harmless", "evidence_ids": [1]}
+                ],
+            }
+        )
+
+        outcome_without_span = verify(payload, evidence)
+        outcome_with_span = verify(payload, evidence, span_texts=span_texts)
+
+        assert len(outcome_without_span.valid_claims) == 1
+        assert len(outcome_with_span.valid_claims) == 0
+        assert outcome_with_span.dropped[0].reason is DropReason.QUOTE_NOT_FOUND
+
+    def test_quote_inside_the_localized_span_survives(self) -> None:
+        window = INDEMNITY_TEXT + " " + TERMINATION_TEXT
+        evidence = _evidence((1, _chunk(0, window)))
+        payload = json.dumps(
+            {
+                "answerable": True,
+                "claims": [
+                    {
+                        "text": "Thirty days notice.",
+                        "quote": "thirty (30) days prior written notice",
+                        "evidence_ids": [1],
+                    }
+                ],
+            }
+        )
+
+        outcome = verify(payload, evidence, span_texts={1: TERMINATION_TEXT})
+
+        assert len(outcome.valid_claims) == 1

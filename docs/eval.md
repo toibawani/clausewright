@@ -147,8 +147,8 @@ Three things follow, and none of them flatters the design:
 - Window size dominates every other choice here. `win400` beats `win300` on
   R@1 for all four retrievers, but part of that is packing 400 words into a
   slot; at a 1500-word budget `win300` is better for bm25 (0.8559 vs 0.8316).
-- The best cell in the table is `win400:hybrid_rerank` at R@1 0.7400. The
-  product chunker's best cell is 0.6209.
+- The highest cell in the table is `win400:hybrid_rerank` at R@1 0.7400. The
+  product chunker's highest cell is 0.6209.
 
 ## Post-fix structure rerun (2026-11-22)
 
@@ -275,3 +275,145 @@ The default selected earlier by the R@5 rule (win500 with hybrid_rerank) is
 rewards bigger windows mechanically; see E-008 in `docs/experiments.md`. The
 selection is exploratory, the baseline freeze for win500 is held, and the
 retrieval table above is reported as measurement rather than as a decision.
+
+## Clean factorial (`3ae9c47`, dev)
+
+The factorial was rerun from a clean worktree at a pushed commit, after the
+unique-chunk-id fix, with embeddings and reranker scores served from the disk
+cache. Every table in this section is generated from
+`benchmarks/results/factorial-clean-3ae9c47.json` by
+`scripts/render_docs_tables.py`; `tests/test_docs_consistency.py` fails when the
+committed text differs from what the store produces.
+
+Chunk sizes over the 20 dev contracts:
+
+<!-- BEGIN GENERATED: factorial_chunks -->
+| Chunking | Chunks | Mean words | Median | p90 | Max |
+|---|---|---|---|---|---|
+| `struct` | 872 | 202.7 | 195.5 | 300.0 | 370 |
+| `struct_packed_300` | 1143 | 162.8 | 187 | 300.0 | 300 |
+| `struct_packed_400` | 978 | 177.4 | 164.5 | 400.0 | 400 |
+| `win150` | 1839 | 149.8 | 150 | 150.0 | 226 |
+| `win200` | 1379 | 199.2 | 200 | 200.0 | 200 |
+| `win300` | 915 | 298.5 | 300 | 300.0 | 300 |
+| `win400` | 685 | 396.8 | 400 | 400.0 | 400 |
+| `win500` | 545 | 495.6 | 500 | 500.0 | 500 |
+<!-- END GENERATED: factorial_chunks -->
+
+Metrics per chunking and retriever:
+
+<!-- BEGIN GENERATED: factorial_metrics -->
+Run `3ae9c47`, split `dev`, 180 answerable queries on 20 contracts, dataset hash `5174daa11351d36c02eee257e924db79`. Generated from `benchmarks/results/factorial-clean-3ae9c47.json`.
+
+| Config | R@1 | R@5 | R@10 | MRR | R@1500w | R@3000w |
+|---|---|---|---|---|---|---|
+| `struct:bm25` | 0.5067 | 0.7965 | 0.8594 | 0.6748 | 0.8353 | 0.8594 |
+| `struct:dense` | 0.5106 | 0.7433 | 0.8433 | 0.6519 | 0.8116 | 0.8433 |
+| `struct:hybrid` | 0.5604 | 0.7905 | 0.8760 | 0.6871 | 0.8093 | 0.8760 |
+| `struct:hybrid_rerank` | 0.6302 | 0.8350 | 0.9117 | 0.7518 | 0.8704 | 0.9062 |
+| `struct_packed_300:bm25` | 0.5292 | 0.8177 | 0.8645 | 0.7091 | 0.8465 | 0.8645 |
+| `struct_packed_300:dense` | 0.4973 | 0.7253 | 0.8385 | 0.6352 | 0.8111 | 0.8385 |
+| `struct_packed_300:hybrid` | 0.5220 | 0.7774 | 0.8706 | 0.6764 | 0.7984 | 0.8706 |
+| `struct_packed_300:hybrid_rerank` | 0.5674 | 0.8375 | 0.8903 | 0.7134 | 0.8734 | 0.8903 |
+| `struct_packed_400:bm25` | 0.6040 | 0.8557 | 0.8981 | 0.7573 | 0.8420 | 0.8870 |
+| `struct_packed_400:dense` | 0.5381 | 0.7677 | 0.8688 | 0.6696 | 0.8327 | 0.8633 |
+| `struct_packed_400:hybrid` | 0.5850 | 0.8385 | 0.8833 | 0.7185 | 0.8399 | 0.8778 |
+| `struct_packed_400:hybrid_rerank` | 0.6049 | 0.8571 | 0.9046 | 0.7409 | 0.8792 | 0.9046 |
+| `win150:bm25` | 0.3839 | 0.6891 | 0.7762 | 0.5610 | 0.7762 | 0.7762 |
+| `win150:dense` | 0.4606 | 0.7118 | 0.8123 | 0.6115 | 0.8123 | 0.8123 |
+| `win150:hybrid` | 0.5379 | 0.7179 | 0.7943 | 0.6556 | 0.7943 | 0.7943 |
+| `win150:hybrid_rerank` | 0.5331 | 0.7379 | 0.8181 | 0.6707 | 0.8181 | 0.8181 |
+| `win200:bm25` | 0.4845 | 0.8031 | 0.8438 | 0.6684 | 0.8192 | 0.8438 |
+| `win200:dense` | 0.5060 | 0.7579 | 0.8316 | 0.6594 | 0.8045 | 0.8316 |
+| `win200:hybrid` | 0.5984 | 0.7780 | 0.8375 | 0.7154 | 0.7986 | 0.8375 |
+| `win200:hybrid_rerank` | 0.5712 | 0.8320 | 0.8528 | 0.7150 | 0.8450 | 0.8528 |
+| `win300:bm25` | 0.6214 | 0.8559 | 0.8907 | 0.7614 | 0.8559 | 0.8907 |
+| `win300:dense` | 0.6275 | 0.8133 | 0.8732 | 0.7433 | 0.8133 | 0.8732 |
+| `win300:hybrid` | 0.6759 | 0.8407 | 0.8722 | 0.7651 | 0.8407 | 0.8722 |
+| `win300:hybrid_rerank` | 0.6716 | 0.8785 | 0.9065 | 0.7994 | 0.8785 | 0.9065 |
+| `win400:bm25` | 0.7190 | 0.8787 | 0.9148 | 0.8072 | 0.8316 | 0.9019 |
+| `win400:dense` | 0.6323 | 0.8438 | 0.9028 | 0.7492 | 0.8080 | 0.8683 |
+| `win400:hybrid` | 0.6987 | 0.8676 | 0.8889 | 0.7866 | 0.8264 | 0.8759 |
+| `win400:hybrid_rerank` | 0.7400 | 0.8880 | 0.9315 | 0.8338 | 0.8815 | 0.9046 |
+| `win500:bm25` | 0.7495 | 0.8944 | 0.9167 | 0.8241 | 0.8597 | 0.9000 |
+| `win500:dense` | 0.6918 | 0.8671 | 0.9111 | 0.7888 | 0.8336 | 0.8921 |
+| `win500:hybrid` | 0.7643 | 0.8778 | 0.9222 | 0.8284 | 0.8616 | 0.8889 |
+| `win500:hybrid_rerank` | 0.8130 | 0.9259 | 0.9528 | 0.8745 | 0.8935 | 0.9306 |
+<!-- END GENERATED: factorial_metrics -->
+
+Structure-aware chunking against the size-matched fixed window:
+
+<!-- BEGIN GENERATED: factorial_struct_vs_reference -->
+Structure-aware chunking against the size-matched `win300` window, paired by contract. A difference whose interval includes zero is reported as noise.
+
+| Retriever | Metric | Difference | 95% CI | Verdict |
+|---|---|---|---|---|
+| `bm25` | R@1 | -0.1147 | [-0.1693, -0.0603] | structure differs |
+| `bm25` | R@5 | -0.0595 | [-0.1074, -0.0144] | structure differs |
+| `bm25` | R@1500w | -0.0206 | [-0.0560, +0.0137] | noise |
+| `dense` | R@1 | -0.1169 | [-0.1826, -0.0540] | structure differs |
+| `dense` | R@5 | -0.0700 | [-0.1215, -0.0200] | structure differs |
+| `dense` | R@1500w | -0.0017 | [-0.0450, +0.0433] | noise |
+| `hybrid` | R@1 | -0.1155 | [-0.1913, -0.0433] | structure differs |
+| `hybrid` | R@5 | -0.0502 | [-0.0874, -0.0147] | structure differs |
+| `hybrid` | R@1500w | -0.0314 | [-0.0650, -0.0009] | structure differs |
+| `hybrid_rerank` | R@1 | -0.0414 | [-0.1092, +0.0313] | noise |
+| `hybrid_rerank` | R@5 | -0.0435 | [-0.0865, -0.0014] | structure differs |
+| `hybrid_rerank` | R@1500w | -0.0081 | [-0.0417, +0.0233] | noise |
+<!-- END GENERATED: factorial_struct_vs_reference -->
+
+## Part B: packed chunkers and the selection decision
+
+Two chunkings that keep section boundaries and pack consecutive sections up to a
+word budget, `struct_packed_300` and `struct_packed_400`, were added to the
+factorial. Their rows are in the generated tables above, next to the fixed-window
+rows they are meant to be compared with.
+
+The default is now chosen on recall at a 1500-word budget rather than on recall
+at k, because recall at k rewards a chunker for emitting longer chunks (E-008 in
+`docs/experiments.md`). Under that rule the product chunker at 300 words is the
+selection, and it is labelled exploratory: its difference from the strongest
+fixed window at the same budget has an interval that includes zero, so the
+measurement does not separate them. The earlier selection, win500 with
+`hybrid_rerank` chosen on R@5, is not adopted.
+
+No configuration is presented as better than another unless its interval
+excludes zero. Where an interval includes zero, this document says the
+difference is noise at this sample size, which is a statement about 20 contracts
+rather than about contracts in general.
+
+## Span localization (E-009, `3b48a8d`)
+
+E-009 asked whether citing one sentence inside the retrieved window beats
+citing the whole window. It was preregistered in `docs/experiments.md` before
+the run; the run is recorded in
+`benchmarks/results/span-localization-3b48a8d.json`, and the table below is
+generated from it.
+
+<!-- BEGIN GENERATED: span_localization -->
+Run `3b48a8d`, 160 queries with a gold window on 20 contracts, 1500-word retrieved budget, 20 queries without a gold window excluded.
+
+| Citation | Span hit | Mean chars | Char precision | Char recall |
+|---|---|---|---|---|
+| `window` | 1.0000 | 1445.4 | 0.1733 | 0.8566 |
+| `bm25` | 0.4000 | 384.1 | 0.4472 | 0.6032 |
+| `cross_encoder` | 0.4875 | 306.8 | 0.5523 | 0.6251 |
+
+Each localizer against the window it localizes, paired by contract:
+
+| Localizer | Metric | Difference | 95% CI | Verdict |
+|---|---|---|---|---|
+| `bm25` | char precision | +0.2739 | [+0.2238, +0.3256] | differs |
+| `bm25` | char recall | -0.2534 | [-0.3021, -0.2078] | differs |
+| `bm25` | span hit | -0.6000 | [-0.6867, -0.5059] | differs |
+| `cross_encoder` | char precision | +0.3790 | [+0.3210, +0.4390] | differs |
+| `cross_encoder` | char recall | -0.2316 | [-0.2877, -0.1834] | differs |
+| `cross_encoder` | span hit | -0.5125 | [-0.6176, -0.4079] | differs |
+<!-- END GENERATED: span_localization -->
+
+Character precision rises for both localizers and the intervals exclude zero,
+but span hit rate falls sharply: the sentence selected is often not the
+sentence that holds the clause, and character recall falls with it. Under the
+preregistered rule the difference has to come without losing more than two
+points of span hit rate, so the rule is not met. `localize_spans` stays off by
+default and the product keeps citing the whole retrieved window.
