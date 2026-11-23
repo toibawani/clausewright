@@ -17,3 +17,6 @@ data/llm_cache/
 
 # Result files embed contract-derived quotes; never commit them.
 results/
+
+# Scratch space for files moved out of the tree; never committed.
+scratch/
