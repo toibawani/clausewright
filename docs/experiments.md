@@ -277,3 +277,37 @@ is held; it is not a decision that survives this amendment.
 **Applied by.** `scripts/select_default.py` (rewritten for equal-budget
 recall), which prints the ordering, the decision, and the R@3000w difference for
 every configuration.
+
+## E-009: span localization inside the cited window (preregistered 2026-11-23)
+
+**Question.** When a retrieved window already contains the clause, does citing
+one sentence inside it give the reader a tighter citation than citing the whole
+window, without losing the clause?
+
+**Hypothesis.** Character precision against the gold span rises for both
+localizers, and span hit rate - which decides whether the citation still holds
+the clause - falls by no more than 2 points.
+
+**Design.** Dev split only: 20 contracts, 180 answerable queries. Product
+chunking `struct` at 300 words, hybrid retrieval, 25 rerank candidates, top 10.
+Per item, chunks are taken in ranked order until a 1500-word budget; the first
+chunk inside that budget that holds a gold span is today's citation. Each
+localizer picks one sentence from it: `bm25` scores sentences by term overlap
+within the window, `cross_encoder` scores them with the reranker model. If a
+localizer returns nothing, the citation stays the whole chunk, which is what the
+product does now.
+
+**Metrics.** Span hit rate at the existing 50 percent token-overlap threshold;
+character precision and recall against the gold span; mean cited characters.
+Paired bootstrap over contracts, 10000 resamples, seed 20261018, each localizer
+against the window it localizes.
+
+**Decision rule.** `localize_spans` may become default only if character
+precision at the 1500-word budget rises with a paired 95 percent interval that
+excludes zero, and span hit rate falls by no more than 2 points. Even if both
+hold, the flag stays off this round; turning it on is the owner's call.
+
+**Budget.** About two hours of CPU, one job at a time, no LLM calls.
+
+**Status.** Preregistered before the run. The result file carries the commit,
+clean-tree flag, model names, and threading settings of the run that produced it.

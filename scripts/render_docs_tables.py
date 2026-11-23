@@ -160,10 +160,67 @@ def render_structure_vs_reference(record: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def render_readme_headline(record: dict[str, Any]) -> str:
+    """The one table the README shows: the finalist against its size-matched window."""
+    dataset = record["dataset"]
+    reference = record["config"].get("reference_chunking", "win300")
+    product = "struct:hybrid_rerank"
+    baseline = f"{reference}:hybrid_rerank"
+    lines = [
+        (
+            f"Dev retrieval, {dataset['n_contracts']} contracts, "
+            f"{dataset['n_queries']} answerable queries, run `{record['commit']}`, "
+            f"dataset hash `{dataset['hash']}`."
+        ),
+        "",
+    ]
+    lines.extend(_header(["Config", "R@1", "R@5", "R@1500w"]))
+    for name in (product, baseline):
+        metrics = record["metrics"][name]
+        lines.append(
+            _row(
+                [f"`{name}`"]
+                + [
+                    f"{metrics[key]:.4f}"
+                    for key in ("recall_at_1", "recall_at_5", "recall_at_1500_words")
+                ]
+            )
+        )
+
+    comparison = next(
+        (
+            item
+            for item in record["comparisons"]
+            if item["metric"] == "recall_at_1500w"
+            and {item["left"], item["right"]} == {product, baseline}
+        ),
+        None,
+    )
+    lines.append("")
+    if comparison is None:
+        lines.append("No paired comparison at a 1500-word budget was recorded for these two.")
+        return "\n".join(lines)
+
+    point = comparison["point"]
+    sign = "+" if point >= 0 else "-"
+    low, high = sorted((comparison["ci_low"], comparison["ci_high"]))
+    verdict = (
+        "the interval includes zero, so at this sample size the two are not distinguishable"
+        if not comparison["excludes_zero"]
+        else "the interval excludes zero, so the difference is larger than this sample's noise"
+    )
+    lines.append(
+        f"Structure minus the size-matched window at a 1500-word budget: "
+        f"{sign}{abs(point):.4f} [{low:+.4f}, {high:+.4f}]; {verdict}."
+    )
+    return "\n".join(lines)
+
+
 RENDERERS = {
     "factorial_metrics": render_factorial_metrics,
     "factorial_chunks": render_factorial_chunks,
     "factorial_struct_vs_reference": render_structure_vs_reference,
+    "readme_headline": render_readme_headline,
 }
 
 
