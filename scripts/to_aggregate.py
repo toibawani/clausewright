@@ -66,16 +66,57 @@ def factorial_to_aggregate(
     }
 
 
+def span_to_aggregate(
+    raw: dict[str, Any],
+    *,
+    experiment_id: str,
+    protocol: str,
+) -> dict[str, Any]:
+    """Convert a raw span-localization report into the aggregate format."""
+    provenance = dict(raw.get("provenance") or {})
+    if "commit" in provenance:
+        provenance["commit"] = _single_commit(str(provenance["commit"]))
+
+    config = raw.get("config") or {}
+    return {
+        "experiment_id": experiment_id,
+        "kind": "span_localization",
+        "protocol": protocol,
+        "commit": provenance.get("commit_short") or provenance.get("commit", ""),
+        "provenance": provenance,
+        "cache": raw.get("cache", {}),
+        "dataset": {
+            "name": config.get("split", "dev"),
+            "hash": raw.get("dataset_hash"),
+            "n_contracts": raw.get("n_contracts"),
+            "n_items_measured": raw.get("n_items_measured"),
+            "n_items_without_gold_window": raw.get("n_items_without_gold_window"),
+        },
+        "config": config,
+        "summary": raw.get("summary", {}),
+        "comparisons": raw.get("comparisons", []),
+    }
+
+
+CONVERTERS = {
+    "factorial": factorial_to_aggregate,
+    "span": span_to_aggregate,
+}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--kind", choices=sorted(CONVERTERS), default="factorial")
     parser.add_argument("--experiment-id", required=True)
     parser.add_argument("--protocol", required=True, help="experiment id in docs/experiments.md")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
 
     raw = json.loads(args.input.read_text())
-    aggregate = factorial_to_aggregate(raw, experiment_id=args.experiment_id, protocol=args.protocol)
+    aggregate = CONVERTERS[args.kind](
+        raw, experiment_id=args.experiment_id, protocol=args.protocol
+    )
 
     if args.output.exists():
         print(f"refusing to overwrite {args.output}; a new run is a new file")
