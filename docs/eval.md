@@ -267,3 +267,11 @@ python -m clausewright.eval retrieval --split dev
 scripts/run_dev_eval.py                        # per-config JSON in results/
 scripts/factorial_eval.py --split dev          # chunking x retriever factorial
 ```
+
+## Selection status (2026-11-22)
+
+The default selected earlier by the R@5 rule (win500 with hybrid_rerank) is
+**not adopted**. The rule was amended to equal-budget recall because R@5
+rewards bigger windows mechanically; see E-008 in `docs/experiments.md`. The
+selection is exploratory, the baseline freeze for win500 is held, and the
+retrieval table above is reported as measurement rather than as a decision.

@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from clausewright.eval.baselines import fixed_window_chunks
+from clausewright.eval.cache import CachedEmbedder, CachedReranker
 from clausewright.eval.dataset import CUAD_SMALL, EvalItem, build_eval_set
 from clausewright.eval.metrics import (
     SPAN_OVERLAP_THRESHOLD,
@@ -62,10 +63,10 @@ from clausewright.eval.metrics import (
     percentile,
     recall_at_k,
 )
+from clausewright.eval.provenance import provenance, require_clean_tree
 from clausewright.eval.stats import PairedDifference, paired_bootstrap
 from clausewright.ingestion import chunk_sections, load_pdf, parse_sections
 from clausewright.ingestion.packed_chunker import pack_sections
-from clausewright.retrieval.embedder import Embedder
 from clausewright.retrieval.hybrid_search import HybridRetriever
 from clausewright.retrieval.reranker import CrossEncoderReranker
 from clausewright.schemas import Chunk, ParsedDocument, Section
@@ -272,6 +273,8 @@ def run_factorial(
     reference: str = "win300",
 ) -> dict[str, Any]:
     """Run the factorial and return a JSON-serialisable report."""
+    # A number produced from a dirty tree matches no commit; refuse it.
+    require_clean_tree()
     started = time.time()
     header = proof_header()
     print(f"branch={header['branch']} commit={header['commit']} python={header['python']}")
@@ -286,8 +289,8 @@ def run_factorial(
     if sample_contracts is not None:
         titles = titles[:sample_contracts]
 
-    embedder = Embedder()
-    reranker = CrossEncoderReranker() if "hybrid_rerank" in retrievers else None
+    embedder = CachedEmbedder()
+    reranker = CachedReranker() if "hybrid_rerank" in retrievers else None
 
     # (chunking, retriever) -> scores
     cells: dict[tuple[str, str], list[QueryScore]] = {
@@ -350,6 +353,17 @@ def run_factorial(
     report: dict[str, Any] = {
         "timestamp": datetime.now(UTC).isoformat(),
         "header": header,
+        "provenance": provenance(
+            embedding_model=embedder.model_name,
+            reranker_model=reranker.model_name if reranker is not None else None,
+            reranker_batch_size=reranker._batch_size if reranker is not None else None,
+        ),
+        "cache": {
+            "embedding_hits": embedder.hits,
+            "embedding_misses": embedder.misses,
+            "rerank_hits": reranker.hits if reranker is not None else 0,
+            "rerank_misses": reranker.misses if reranker is not None else 0,
+        },
         "config": {
             "split": split,
             "chunkings": list(chunkings),
@@ -379,6 +393,7 @@ def run_factorial(
                     "recall_at_10": s.recall_at_10,
                     "mrr": s.mrr,
                     "recall_at_1500w": s.recall_at_1500w,
+                    "recall_at_3000w": s.recall_at_3000w,
                 }
                 for s in cells[(chunking, name)]
             ]

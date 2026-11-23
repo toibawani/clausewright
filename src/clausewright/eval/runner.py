@@ -25,6 +25,7 @@ from clausewright.eval.dataset import (
     build_eval_set,
     dataset_hash,
 )
+from clausewright.eval.provenance import provenance, require_clean_tree
 from clausewright.eval.retrieval import CONFIGS, evaluate_retrieval
 from clausewright.ingestion import chunk_sections, load_pdf, parse_sections
 from clausewright.qa.engine import AnswerEngine
@@ -212,6 +213,8 @@ def run_full_eval(
     run_log_path: Path | str | None = None,
 ) -> dict[str, Any]:
     """Execute full evaluation run, print results table, and record reproducibility envelope."""
+    # A result produced from an uncommitted tree matches no commit.
+    require_clean_tree()
     try:
         from importlib.metadata import version as pkg_version
 
@@ -245,6 +248,7 @@ def run_full_eval(
 
     full_record: dict[str, Any] = {
         "timestamp": datetime.now(UTC).isoformat(),
+        "provenance": provenance(),
         "git_sha": git_sha,
         "clausewright_version": cw_version,
         "model_id": llm.model_name,
