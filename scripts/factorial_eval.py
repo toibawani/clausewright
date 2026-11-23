@@ -451,7 +451,12 @@ def print_report(report: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--split", default="dev", choices=["dev", "test"])
+    parser.add_argument(
+        "--split",
+        default="dev",
+        choices=["dev", "test", "heldout"],
+        help="dev or test; the held-out split is reserved for the declared final run",
+    )
     parser.add_argument(
         "--chunkings", default=",".join(CHUNKINGS), help="comma-separated subset"
     )
@@ -473,6 +478,13 @@ def main(argv: list[str] | None = None) -> int:
         help="include per-query scores so intervals can be recomputed later",
     )
     args = parser.parse_args(argv)
+
+    if args.split == "heldout":
+        parser.error(
+            "the held-out split is reserved for the declared final run "
+            "(CLAUSEWRIGHT_FINAL_RUN=1 with the frozen finalist file); "
+            "this sweep tool may not read it"
+        )
 
     chunkings = tuple(c.strip() for c in args.chunkings.split(",") if c.strip())
     retrievers = tuple(r.strip() for r in args.retrievers.split(",") if r.strip())

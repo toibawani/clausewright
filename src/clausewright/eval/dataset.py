@@ -52,7 +52,7 @@ DEFAULT_CATEGORIES: tuple[str, ...] = (
     "License Grant",
 )
 
-Split = Literal["dev", "test"]
+Split = Literal["dev", "test", "heldout"]
 
 
 @dataclass(frozen=True)
@@ -156,6 +156,82 @@ def file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+@dataclass(frozen=True)
+class ContractIndex:
+    """Annotations and PDF paths for one CUAD distribution on disk."""
+
+    per_contract: dict[str, dict[str, dict[str, object]]]
+    pdf_by_stem: dict[str, Path]
+
+    def pdf_for(self, title: str) -> Path:
+        return self.pdf_by_stem[title]
+
+
+def load_contract_index(json_path: Path, pdf_root: Path) -> ContractIndex:
+    """Read the annotations and index the PDFs by file stem (the CUAD title).
+
+    Only contracts with a PDF on disk are eligible; 510 titles are annotated
+    but 197 ship a document, and an eval question about a missing file cannot
+    be retrieved for.
+    """
+    with json_path.open(encoding="utf-8") as f:
+        raw: dict[str, object] = json.load(f)
+    data = raw["data"]  # type: ignore[index]
+    assert isinstance(data, list)
+
+    pdf_by_stem = {p.stem: p for p in pdf_root.rglob("*.pdf")}
+
+    per_contract: dict[str, dict[str, dict[str, object]]] = {}
+    for item in data:
+        assert isinstance(item, dict)
+        title = str(item["title"])
+        if title not in pdf_by_stem:
+            continue
+        cat_map: dict[str, dict[str, object]] = {}
+        for para in item["paragraphs"]:  # type: ignore[index]
+            for qa in para["qas"]:
+                category = str(qa["id"]).rsplit("__", 1)[-1]
+                cat_map[category] = qa
+        per_contract[title] = cat_map
+
+    return ContractIndex(per_contract=per_contract, pdf_by_stem=pdf_by_stem)
+
+
+def build_items(
+    index: ContractIndex,
+    titles: list[str],
+    categories: tuple[str, ...],
+    split_of: dict[str, Split],
+) -> tuple[EvalItem, ...]:
+    """One item per (contract, annotated category) for *titles*."""
+    items: list[EvalItem] = []
+    for title in titles:
+        cat_map = index.per_contract[title]
+        pdf = index.pdf_for(title)
+        for category in categories:
+            qa = cat_map.get(category)
+            if qa is None:
+                continue
+            answers = qa.get("answers", [])
+            golds = _normalize_golds(answers) if isinstance(answers, list) else ()
+            absent = bool(qa.get("is_impossible", False))
+            if absent and golds:
+                absent = False
+            items.append(
+                EvalItem(
+                    item_id=str(qa["id"]),
+                    split=split_of[title],
+                    contract_title=title,
+                    pdf_path=pdf,
+                    category=category,
+                    question=str(qa["question"]),
+                    gold_texts=golds,
+                    clause_absent=absent,
+                )
+            )
+    return tuple(items)
+
+
 def build_eval_set(
     suite: SuiteConfig,
     *,
@@ -182,32 +258,15 @@ def build_eval_set(
             f"CUAD pdf dir not found: {pdf_root} (run scripts/download_cuad.py)"
         )
 
-    with json_path.open(encoding="utf-8") as f:
-        raw: dict[str, object] = json.load(f)
-    data = raw["data"]  # type: ignore[index]
-    assert isinstance(data, list)
+    index = load_contract_index(json_path, pdf_root)
 
-    pdf_by_stem = {p.stem: p for p in pdf_root.rglob("*.pdf")}
-
-    per_contract: dict[str, dict[str, dict[str, object]]] = {}
-    for item in data:
-        assert isinstance(item, dict)
-        title = str(item["title"])
-        pdf = pdf_by_stem.get(title)
-        if pdf is None:
-            continue
-        cat_map: dict[str, dict[str, object]] = {}
-        for para in item["paragraphs"]:  # type: ignore[index]
-            for qa in para["qas"]:
-                category = str(qa["id"]).rsplit("__", 1)[-1]
-                cat_map[category] = qa
-        per_contract[title] = cat_map
-
-    missing = [c for c in suite.categories if not any(c in m for m in per_contract.values())]
+    missing = [
+        c for c in suite.categories if not any(c in m for m in index.per_contract.values())
+    ]
     if missing:
         raise ValueError(f"categories absent from CUAD entirely: {missing}")
 
-    titles = sorted(per_contract)
+    titles = sorted(index.per_contract)
     rng = random.Random(suite.seed)
     rng.shuffle(titles)
     if len(titles) < suite.n_contracts:
@@ -221,36 +280,10 @@ def build_eval_set(
         t: ("dev" if idx < n_dev else "test") for idx, t in enumerate(selected)
     }
 
-    items: list[EvalItem] = []
-    for title in selected:
-        cat_map = per_contract[title]
-        pdf = pdf_by_stem[title]
-        for category in suite.categories:
-            qa = cat_map.get(category)
-            if qa is None:
-                continue
-            answers = qa.get("answers", [])
-            golds = _normalize_golds(answers) if isinstance(answers, list) else ()
-            absent = bool(qa.get("is_impossible", False))
-            if absent and golds:
-                absent = False
-            items.append(
-                EvalItem(
-                    item_id=str(qa["id"]),
-                    split=split_of[title],
-                    contract_title=title,
-                    pdf_path=pdf,
-                    category=category,
-                    question=str(qa["question"]),
-                    gold_texts=golds,
-                    clause_absent=absent,
-                )
-            )
-
     return EvalSet(
         suite=suite,
         dataset_hash=dataset_hash(json_path),
-        items=tuple(items),
+        items=build_items(index, selected, suite.categories, split_of),
     )
 
 
