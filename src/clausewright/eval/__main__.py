@@ -68,6 +68,35 @@ def _cmd_dataset(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# held-out split helpers
+# ---------------------------------------------------------------------------
+
+
+def _heldout_eval_set(split: str, finalist: str | None) -> Any:
+    """The frozen held-out split, or None for dev/test.
+
+    Reading the held-out split is refused unless this is a declared final run
+    against the frozen finalist file; the guard raises before a model loads.
+    """
+    if split != "heldout":
+        return None
+    from clausewright.eval import heldout
+
+    heldout.require_final_run(finalist_path=finalist)
+    return heldout.build_heldout_eval_set()
+
+
+def _log_heldout_look(result_path: Path, *, configuration: str) -> None:
+    from clausewright.eval import heldout
+
+    heldout.record_look(
+        configuration=configuration,
+        result_path=result_path,
+        note=heldout.describe_command(sys.argv),
+    )
+
+
+# ---------------------------------------------------------------------------
 # retrieval subcommand
 # ---------------------------------------------------------------------------
 
@@ -84,14 +113,18 @@ def _cmd_retrieval(args: argparse.Namespace) -> int:
     else:
         configs_to_run = tuple(c.strip() for c in args.config.split(","))
 
+    eval_set = _heldout_eval_set(args.split, args.finalist)
     print(f"running retrieval evaluation on split '{args.split}' for configs: {configs_to_run}")
     out_path = run_and_save_retrieval_eval(
         output_path=Path(args.out) if args.out else None,
         split=args.split,
         configs=configs_to_run,
         sample_contracts=args.sample,
+        eval_set=eval_set,
     )
     print(f"saved retrieval results: {out_path}")
+    if eval_set is not None:
+        _log_heldout_look(out_path, configuration=f"retrieval:{','.join(configs_to_run)}")
 
     if args.baseline:
         baseline_path = Path(args.baseline)
@@ -128,6 +161,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     print(f"  git={_git_sha()}")
     print(f"{'='*60}\n")
 
+    eval_set = _heldout_eval_set(args.split, args.finalist)
     record = run_full_eval(
         split=args.split,
         configs=configs_to_run,
@@ -135,7 +169,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
         max_llm_calls=args.max_llm_calls,
         replay_cache=args.replay_cache,
         output_path=args.out,
+        eval_set=eval_set,
     )
+    if eval_set is not None:
+        _log_heldout_look(
+            Path(args.out or "data/eval/retrieval_results.json"),
+            configuration=f"run:{','.join(configs_to_run)}",
+        )
 
     _print_retrieval_table({"configs": record.get("retrieval_metrics", {})})
     ans = record.get("answer_metrics", {})
@@ -175,6 +215,27 @@ def _print_retrieval_table(results: dict[str, Any]) -> None:
             f"{scores['n_queries']:>5}"
         )
     print(sep)
+
+
+# ---------------------------------------------------------------------------
+# heldout subcommand — freeze or inspect the contract-disjoint split
+# ---------------------------------------------------------------------------
+
+
+def _cmd_heldout(args: argparse.Namespace) -> int:
+    from clausewright.eval import heldout
+
+    if not args.freeze:
+        manifest = heldout.load_manifest()
+        print(json.dumps(manifest, indent=2))
+        return 0
+
+    path, file_hash = heldout.freeze(seed=args.seed, n_contracts=args.contracts)
+    manifest = heldout.load_manifest(path)
+    print(f"frozen held-out manifest: {path}")
+    print(f"contracts: {manifest['n_contracts']} (disjoint from {manifest['excluded']['suite']})")
+    print(f"file-list sha256: {file_hash}")
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +295,15 @@ def main(argv: list[str] | None = None) -> int:
     # retrieval subcommand
     ret_parser = subparsers.add_parser("retrieval", help="Run retrieval ablation")
     ret_parser.add_argument("--config", type=str, default="all")
-    ret_parser.add_argument("--split", type=str, default="dev", choices=["dev", "test"])
+    ret_parser.add_argument(
+        "--split", type=str, default="dev", choices=["dev", "test", "heldout"]
+    )
+    ret_parser.add_argument(
+        "--finalist",
+        type=str,
+        default=None,
+        help="Frozen finalist file; required (and checked) for --split heldout",
+    )
     ret_parser.add_argument("--sample", type=int, default=None)
     ret_parser.add_argument("--out", type=str, default=None)
     ret_parser.add_argument(
@@ -260,8 +329,17 @@ def main(argv: list[str] | None = None) -> int:
         "--split",
         type=str,
         default="dev",
-        choices=["dev", "test"],
-        help="Dataset split to evaluate (default: dev; use test only for final reporting)",
+        choices=["dev", "test", "heldout"],
+        help=(
+            "Dataset split to evaluate (default: dev; use test only for final "
+            "reporting; heldout only for the declared final run)"
+        ),
+    )
+    run_parser.add_argument(
+        "--finalist",
+        type=str,
+        default=None,
+        help="Frozen finalist file; required (and checked) for --split heldout",
     )
     run_parser.add_argument(
         "--config",
@@ -295,6 +373,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     run_parser.set_defaults(func=_cmd_run)
 
+    # heldout subcommand
+    ho_parser = subparsers.add_parser(
+        "heldout",
+        help="Freeze (once) or inspect the contract-disjoint held-out split",
+    )
+    ho_parser.add_argument(
+        "--freeze",
+        action="store_true",
+        help="write the manifest if it is not frozen yet; refuses to change one",
+    )
+    ho_parser.add_argument("--seed", type=int, default=20261123)
+    ho_parser.add_argument("--contracts", type=int, default=30)
+    ho_parser.set_defaults(func=_cmd_heldout)
+
     # calibrate subcommand
     cal_parser = subparsers.add_parser(
         "calibrate",
@@ -321,8 +413,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     cal_parser.set_defaults(func=_cmd_calibrate)
 
+    from clausewright.eval.heldout import HeldoutRefused
+
     args = parser.parse_args(argv)
-    return args.func(args)  # type: ignore[no-any-return]
+    try:
+        return args.func(args)  # type: ignore[no-any-return]
+    except HeldoutRefused as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

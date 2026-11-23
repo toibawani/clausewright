@@ -229,11 +229,12 @@ def run_and_save_retrieval_eval(
     split: str = "dev",
     configs: tuple[str, ...] = CONFIGS,
     sample_contracts: int | None = None,
+    eval_set: EvalSet | None = None,
 ) -> Path:
     out = output_path or (PATHS.root / "data" / "eval" / "retrieval_results.json")
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    eval_set = build_eval_set(CUAD_SMALL)
+    eval_set = eval_set or build_eval_set(CUAD_SMALL)
     results = evaluate_retrieval(
         eval_set,
         split=split,

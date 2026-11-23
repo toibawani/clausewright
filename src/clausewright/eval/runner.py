@@ -211,6 +211,7 @@ def run_full_eval(
     replay_cache: Path | str | None = None,
     output_path: Path | str | None = None,
     run_log_path: Path | str | None = None,
+    eval_set: EvalSet | None = None,
 ) -> dict[str, Any]:
     """Execute full evaluation run, print results table, and record reproducibility envelope."""
     # A result produced from an uncommitted tree matches no commit.
@@ -222,7 +223,7 @@ def run_full_eval(
     except Exception:  # noqa: BLE001
         cw_version = "dev"
 
-    eval_set = build_eval_set(CUAD_SMALL)
+    eval_set = eval_set or build_eval_set(CUAD_SMALL)
     cuad_json, _ = _find_default_cuad_paths()
     ds_hash = dataset_hash(cuad_json) if cuad_json.is_file() else "unknown"
     git_sha = get_git_sha()
