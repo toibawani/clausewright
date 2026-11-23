@@ -199,6 +199,23 @@ def test_chunk_id_unique_across_sections() -> None:
     assert len(ids) == len(set(ids))
 
 
+def test_chunk_id_unique_when_section_numbers_repeat() -> None:
+    """Repeated headings must not collide.
+
+    Contracts repeat headings (two sections both numbered "1"). The id format
+    is ``doc-section-window``, so those produced identical ids; every map
+    keyed by chunk_id then kept one chunk and dropped the other, which made a
+    chunk unreachable after fusion even when BM25 ranked it first.
+    """
+    s1 = _section("1", _block(_words(100)))
+    s2 = _section("1", _block(_words(100)))
+    chunks = chunk_sections("doc", [s1, s2], max_words=100, stride=50)
+    ids = [c.chunk_id for c in chunks]
+    assert len(ids) == len(set(ids))
+    assert ids[0] == "doc-1-0"
+    assert ids[1] == "doc-1-0-1"
+
+
 # ---------------------------------------------------------------------------
 # Page range attribution
 # ---------------------------------------------------------------------------

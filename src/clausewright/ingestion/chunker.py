@@ -119,6 +119,32 @@ def _build_section_breadcrumbs(section: Section, section_map: dict[str, Section]
     return tuple(reversed(crumbs))
 
 
+def _ensure_unique_chunk_ids(chunks: list[Chunk]) -> list[Chunk]:
+    """Make ``chunk_id`` unique across the document.
+
+    The id format (``doc-section-window``) collides whenever the parser emits
+    the same ``section_number`` twice, which CUAD contracts do: repeated
+    headings such as "1. Definitions" appear in several places. Downstream,
+    every dictionary keyed by ``chunk_id`` (the retriever's chunk map, RRF
+    fusion) then keeps one chunk and silently drops the others, so a chunk can
+    be ranked first by BM25 and still be unreachable after fusion.
+
+    The first occurrence keeps its id; later ones get a deterministic suffix.
+    """
+    seen: dict[str, int] = {}
+    out: list[Chunk] = []
+    for chunk in chunks:
+        count = seen.get(chunk.chunk_id, 0)
+        seen[chunk.chunk_id] = count + 1
+        if count == 0:
+            out.append(chunk)
+        else:
+            out.append(
+                chunk.model_copy(update={"chunk_id": f"{chunk.chunk_id}-{count}"})
+            )
+    return out
+
+
 def _merge_small_chunks(chunks: list[Chunk], min_words: int = MIN_CHUNK_WORDS) -> list[Chunk]:
     """Merge chunks that are smaller than *min_words* with the next chunk.
 
@@ -270,4 +296,6 @@ def chunk_sections(
     # Merge chunks that are too small to be useful for retrieval
     chunks = _merge_small_chunks(chunks, min_words=MIN_CHUNK_WORDS)
 
-    return chunks
+    # Repeated section numbers would otherwise produce duplicate ids, which
+    # silently collapses chunks in every id-keyed map downstream.
+    return _ensure_unique_chunk_ids(chunks)
