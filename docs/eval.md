@@ -275,3 +275,27 @@ The default selected earlier by the R@5 rule (win500 with hybrid_rerank) is
 rewards bigger windows mechanically; see E-008 in `docs/experiments.md`. The
 selection is exploratory, the baseline freeze for win500 is held, and the
 retrieval table above is reported as measurement rather than as a decision.
+
+## Clean factorial (`3ae9c47`, dev)
+
+The factorial was rerun from a clean worktree at a pushed commit, after the
+unique-chunk-id fix, with embeddings and reranker scores served from the disk
+cache. Every table in this section is generated from
+`benchmarks/results/factorial-clean-3ae9c47.json` by
+`scripts/render_docs_tables.py`; `tests/test_docs_consistency.py` fails when the
+committed text differs from what the store produces.
+
+Chunk sizes over the 20 dev contracts:
+
+<!-- BEGIN GENERATED: factorial_chunks -->
+<!-- END GENERATED: factorial_chunks -->
+
+Metrics per chunking and retriever:
+
+<!-- BEGIN GENERATED: factorial_metrics -->
+<!-- END GENERATED: factorial_metrics -->
+
+Structure-aware chunking against the size-matched fixed window:
+
+<!-- BEGIN GENERATED: factorial_struct_vs_reference -->
+<!-- END GENERATED: factorial_struct_vs_reference -->
